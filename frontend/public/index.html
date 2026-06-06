@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KSRTC Nippani - Live Bus Tracker</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">
+      <div class="navbar-logo">KSRTC</div>
+      <div>
+        <div class="navbar-title">Nippani Depot</div>
+        <div class="navbar-subtitle">Live Bus Tracker</div>
+      </div>
+    </a>
+    <button class="hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="navbar-nav" id="navMenu">
+      <li><a href="/" class="active">🏠 Home</a></li>
+      <li><a href="/track">📍 Track Bus</a></li>
+      <li><a href="/timetable">🕐 Timetable</a></li>
+      <li><a href="/conductor">🚌 Conductor</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Track Your <span>KSRTC Bus</span><br>In Real Time</h1>
+      <p>Live GPS tracking for Nippani Depot buses. Know exactly where your bus is.</p>
+
+      <!-- SEARCH BOX -->
+      <div class="search-box">
+        <div class="search-tabs">
+          <button class="search-tab active" data-tab="bus">🔍 By Bus No.</button>
+          <button class="search-tab" data-tab="route">🗺️ By Route</button>
+          <button class="search-tab" data-tab="stop">📍 By Stop</button>
+        </div>
+
+        <div id="tabBus">
+          <div class="search-form">
+            <input class="search-input" id="busInput" type="text" placeholder="e.g. KA22F1234" autocomplete="off" />
+            <button class="btn btn-primary" onclick="trackBus()">Track Bus</button>
+          </div>
+        </div>
+
+        <div id="tabRoute" style="display:none">
+          <div class="search-form">
+            <select class="search-input form-select" id="routeSelect">
+              <option value="">Select Route...</option>
+            </select>
+            <button class="btn btn-primary" onclick="trackRoute()">Find Buses</button>
+          </div>
+        </div>
+
+        <div id="tabStop" style="display:none">
+          <div class="search-form" style="flex-direction:column;gap:10px">
+            <div style="display:flex;gap:10px">
+              <input class="search-input" id="fromStop" type="text" placeholder="From stop (e.g. Nippani)" style="flex:1"/>
+              <input class="search-input" id="toStop"   type="text" placeholder="To stop (e.g. Kurli)"    style="flex:1"/>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="searchByStop()">🔍 Find Buses</button>
+          </div>
+          <div id="stopSearchResult" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACTIVE BUSES -->
+  <section class="section" style="padding-top:32px">
+    <div class="container">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">🟢 Buses Active Now</h2>
+        <span id="activeBusCount" class="live-badge"><span class="live-dot"></span> Live</span>
+      </div>
+      <div id="activeBuses" class="grid-3">
+        <div class="empty-state" style="grid-column:1/-1;padding:40px">
+          <div class="empty-state-icon">🚌</div>
+          <p>Loading active buses...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- POPULAR ROUTES -->
+  <section class="section" style="background:white;padding:40px 0">
+    <div class="container">
+      <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;margin-bottom:20px">🗺️ Popular Routes</h2>
+      <div id="popularRoutes" class="grid-3">
+        <!-- Loaded dynamically -->
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section">
+    <div class="container">
+      <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;text-align:center;margin-bottom:32px">How It Works</h2>
+      <div class="grid-3">
+        <div class="card" style="text-align:center">
+          <div style="font-size:40px;margin-bottom:16px">📱</div>
+          <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:8px">Conductor Starts Trip</h3>
+          <p style="font-size:14px;color:var(--text-muted)">Conductor logs in, selects bus & route, starts trip sharing GPS.</p>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:40px;margin-bottom:16px">📡</div>
+          <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:8px">GPS Sent Every 10s</h3>
+          <p style="font-size:14px;color:var(--text-muted)">Bus location is broadcast to all passengers in real time.</p>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:40px;margin-bottom:16px">🗺️</div>
+          <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:8px">Passenger Tracks Bus</h3>
+          <p style="font-size:14px;color:var(--text-muted)">Live map updates without page refresh. Know ETA instantly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <strong>KSRTC Nippani Depot</strong> — Live Bus Tracking System &nbsp;|&nbsp; Karnataka State Road Transport Corporation
+  </footer>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    const API = '';
+
+    // Hamburger menu
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('navMenu').classList.toggle('open');
+    });
+
+    // Tabs
+    document.querySelectorAll('.search-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tabBus').style.display = tab.dataset.tab === 'bus' ? 'block' : 'none';
+        document.getElementById('tabRoute').style.display = tab.dataset.tab === 'route' ? 'block' : 'none';
+      });
+    });
+
+    // Enter key support
+    document.getElementById('busInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') trackBus();
+    });
+
+    function trackBus() {
+      const bn = document.getElementById('busInput').value.trim().toUpperCase();
+      if (!bn) { showToast('Please enter a bus number', 'error'); return; }
+      window.location.href = `/track?bus=${encodeURIComponent(bn)}`;
+    }
+
+    function trackRoute() {
+      const r = document.getElementById('routeSelect').value;
+      if (!r) { showToast('Please select a route', 'error'); return; }
+      window.location.href = `/track?route=${encodeURIComponent(r)}`;
+    }
+
+    async function searchByStop() {
+      const from = document.getElementById('fromStop').value.trim();
+      const to   = document.getElementById('toStop').value.trim();
+      if (!from || !to) { showToast('Enter both From and To stops', 'error'); return; }
+      if (from.toLowerCase() === to.toLowerCase()) { showToast('From and To must be different stops', 'error'); return; }
+
+      const resultDiv = document.getElementById('stopSearchResult');
+      resultDiv.innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:14px">🔍 Searching...</div>';
+      try {
+        const data = await fetch(`/api/variants/search/stops?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json());
+        if (!data.buses || data.buses.length === 0) {
+          resultDiv.innerHTML = `<div class="alert alert-info">No active buses found from <strong>${from}</strong> → <strong>${to}</strong> right now. Check the <a href="/timetable">timetable</a> for schedules.</div>`;
+          return;
+        }
+        const busCards = data.buses.map(b => {
+          const routeLabel = b.routeId ? `${b.routeId.source} → ${b.routeId.destination}` : '';
+          const variant = data.variants.find(v => v._id === (b.variantId?._id || b.variantId));
+          const variantLabel = variant ? variant.name : '';
+          return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div>
+              <strong style="font-family:'Rajdhani',sans-serif;font-size:18px">${b.busNumber}</strong>
+              <div style="font-size:13px;color:var(--text-muted)">${routeLabel}${variantLabel ? ' · '+variantLabel : ''}</div>
+              <div style="font-size:12px;color:var(--success);margin-top:2px">🟢 Live now</div>
+            </div>
+            <a href="/track?bus=${b.busNumber}" class="btn btn-success btn-sm">📍 Track</a>
+          </div>`;
+        }).join('');
+        resultDiv.innerHTML = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${data.buses.length} bus(es) found:</div>${busCards}`;
+      } catch(e) {
+        resultDiv.innerHTML = '<div class="alert alert-error">Search failed. Please try again.</div>';
+      }
+    }
+
+    // Load routes for dropdown
+    async function loadRoutes() {
+      try {
+        const routes = await fetch('/api/routes').then(r => r.json());
+        const sel = document.getElementById('routeSelect');
+        const popular = document.getElementById('popularRoutes');
+        routes.forEach((r, i) => {
+          sel.innerHTML += `<option value="${r._id}">${r.source} → ${r.destination}</option>`;
+          popular.innerHTML += `
+            <div class="route-card" onclick="window.location.href='/track?route=${r._id}'">
+              <div class="route-icon">🚌</div>
+              <div>
+                <div class="route-name">${r.source} → ${r.destination}</div>
+                <div class="route-meta">Tap to track buses on this route</div>
+              </div>
+            </div>`;
+        });
+        if (routes.length === 0) {
+          popular.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1">No routes configured yet.</p>';
+        }
+      } catch(e) { console.error(e); }
+    }
+
+    // Load active buses
+    async function loadActiveBuses() {
+      try {
+        const buses = await fetch('/api/live/active').then(r => r.json());
+        const container = document.getElementById('activeBuses');
+        document.getElementById('activeBusCount').innerHTML = `<span class="live-dot"></span> ${buses.length} Active`;
+        if (buses.length === 0) {
+          container.innerHTML = `<div class="empty-state" style="grid-column:1/-1;padding:40px">
+            <div class="empty-state-icon">🚌</div>
+            <h3>No Active Buses Right Now</h3>
+            <p>Buses will appear here when conductors start trips.</p>
+          </div>`;
+          return;
+        }
+        container.innerHTML = buses.map(b => `
+          <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+              <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">${b.busNumber}</div>
+              <span class="live-badge"><span class="live-dot"></span> Live</span>
+            </div>
+            <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px">
+              ${b.routeId ? `${b.routeId.source} → ${b.routeId.destination}` : 'Route info unavailable'}
+            </div>
+            <button class="btn btn-primary btn-sm btn-block">📍 Track This Bus</button>
+          </div>`).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    function showToast(msg, type = '') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      document.getElementById('toastContainer').appendChild(t);
+      setTimeout(() => t.remove(), 3500);
+    }
+
+    loadRoutes();
+    loadActiveBuses();
+    setInterval(loadActiveBuses, 15000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#003d7a">
+  <title>Conductor Dashboard - KSRTC</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    body { background: #f0f4f8; }
+    .top-bar {
+      background: linear-gradient(135deg,var(--primary-dark),var(--primary));
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    }
+    .top-bar h1 { font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700; }
+    .top-bar p  { font-size:12px; opacity:0.8; }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <div>
+    <h1>🚌 KSRTC Conductor</h1>
+    <p id="conductorLabel">Loading...</p>
+  </div>
+  <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.4)" onclick="logout()">Logout</button>
+</div>
+
+<!-- NETWORK BANNER -->
+<div class="network-banner" id="networkBanner"></div>
+
+<!-- QUEUE BANNER -->
+<div class="queue-banner" id="queueBanner" style="display:none">
+  ⏳ <span id="queueCount">0</span> GPS updates queued — will sync when online
+</div>
+
+<!-- MAIN -->
+<div class="conductor-mobile">
+
+  <!-- STATUS RING -->
+  <div style="text-align:center;padding:20px 0 12px">
+    <div class="status-ring idle" id="statusRing">
+      <div class="ring-icon" id="ringIcon">🚌</div>
+      <div id="ringLabel">Ready</div>
+    </div>
+  </div>
+
+  <!-- STATUS CHIPS -->
+  <div class="chips-row" id="chipsRow">
+    <div class="info-chip" id="gpsChip">📍 GPS: —</div>
+    <div class="info-chip" id="netChip">📶 Network: —</div>
+    <div class="info-chip" id="lastChip">🕐 Last: —</div>
+  </div>
+
+  <!-- SETUP FORM (shown when no active trip) -->
+  <div id="setupPanel">
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:16px">Start New Trip</h3>
+      <div class="form-group">
+        <label class="form-label">Bus Number</label>
+        <select class="form-control form-select" id="busSelect">
+          <option value="">Select bus...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Route</label>
+        <select class="form-control form-select" id="routeSelect" onchange="loadVariantsForRoute()">
+          <option value="">Select route...</option>
+        </select>
+      </div>
+      <div class="form-group" id="variantGroup" style="display:none">
+        <label class="form-label">Variant / Via <span style="font-weight:400;color:var(--text-light)">(optional)</span></label>
+        <select class="form-control form-select" id="variantSelect">
+          <option value="">No specific variant</option>
+        </select>
+      </div>
+    </div>
+    <button class="big-btn big-btn-start" id="startBtn" onclick="startTrip()">
+      🟢 Start Trip &amp; Share GPS
+    </button>
+  </div>
+
+  <!-- ACTIVE TRIP (shown during active trip) -->
+  <div id="activePanel" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div class="info-row">
+        <span class="info-label">Bus</span>
+        <strong class="info-value" id="activeBusLabel" style="font-family:'Rajdhani',sans-serif;font-size:20px">—</strong>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Route</span>
+        <span class="info-value" id="activeRouteLabel">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">GPS Updates Sent</span>
+        <span class="info-value" id="sentCount">0</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Speed</span>
+        <span class="info-value" id="speedLabel">— km/h</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Accuracy</span>
+        <span class="info-value" id="accuracyLabel">—</span>
+      </div>
+    </div>
+
+    <!-- GPS Log -->
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:10px">GPS LOG</div>
+      <div id="gpsLog" style="font-family:monospace;font-size:12px;max-height:120px;overflow-y:auto;color:var(--text-muted)">
+        Waiting for GPS...
+      </div>
+    </div>
+
+    <button class="big-btn big-btn-stop" id="stopBtn" onclick="confirmStop()">
+      🔴 Stop Trip
+    </button>
+
+    <div style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-muted)">
+      ⚠️ Keep this page open while driving. If you close it, passengers will see you as offline.
+    </div>
+  </div>
+
+</div><!-- /conductor-mobile -->
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ── Auth guard ─────────────────────────────────────────────────────────────
+const token = localStorage.getItem('conductorToken');
+const conductorId   = localStorage.getItem('conductorId');
+const conductorUser = localStorage.getItem('conductorUser');
+const conductorName = localStorage.getItem('conductorName') || conductorUser;
+if (!token) { window.location.href = '/conductor'; }
+
+document.getElementById('conductorLabel').textContent = conductorName + ' (' + conductorUser + ')';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let socket;
+let watchId = null;
+let sentCount = 0;
+let tripActive = false;
+let currentBus = null;
+let currentTripId = null;
+let currentRouteId = null;
+let currentRouteName = null;
+let currentVariantId = null;
+let lastSendMs = 0;
+let offlineQueue = [];  // GPS updates queued while offline
+let isOnline = navigator.onLine;
+
+// Restore state from localStorage (handles page refresh)
+const savedTrip = (() => {
+  try { return JSON.parse(localStorage.getItem('activeTrip')); } catch{ return null; }
+})();
+
+// ── Socket.IO ─────────────────────────────────────────────────────────────
+function connectSocket() {
+  socket = io({ reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
+
+  socket.on('connect', () => {
+    updateNetChip(true);
+    // Attempt trip restore on reconnect
+    if (tripActive && currentBus && currentTripId) {
+      socket.emit('restoreTrip', {
+        busNumber: currentBus,
+        tripId: currentTripId,
+        conductorId,
+        conductorName
+      });
+    }
+    // Flush queued updates
+    flushQueue();
+  });
+
+  socket.on('disconnect', () => updateNetChip(false));
+
+  socket.on('tripStarted', (data) => {
+    currentTripId = data.tripId;
+    saveTrip();
+    setRing('active');
+    showActivePanel();
+    showToast('Trip started! GPS sharing active.', 'success');
+  });
+
+  socket.on('tripRestored', (data) => {
+    currentTripId = data.tripId;
+    saveTrip();
+    setRing('active');
+    showActivePanel();
+    showToast('Trip restored automatically ♻️', 'success');
+  });
+
+  socket.on('tripEnded', () => {
+    clearTrip();
+    setRing('idle');
+    showSetupPanel();
+  });
+
+  socket.on('tripError', (data) => {
+    showToast('⚠️ ' + data.message, 'error');
+    setRing('idle');
+  });
+}
+
+// ── Load buses & routes ────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const [buses, routes] = await Promise.all([
+      fetch('/api/buses').then(r => r.json()),
+      fetch('/api/routes').then(r => r.json())
+    ]);
+    const bs = document.getElementById('busSelect');
+    buses.forEach(b => bs.innerHTML += `<option value="${b.busNumber}">${b.busNumber}</option>`);
+    const rs = document.getElementById('routeSelect');
+    routes.forEach(r => rs.innerHTML += `<option value="${r._id}" data-name="${r.source} → ${r.destination}">${r.source} → ${r.destination}</option>`);
+  } catch(e) { showToast('Could not load buses/routes', 'error'); }
+}
+
+async function loadVariantsForRoute() {
+  const routeId = document.getElementById('routeSelect').value;
+  const group = document.getElementById('variantGroup');
+  const sel = document.getElementById('variantSelect');
+  sel.innerHTML = '<option value="">No specific variant</option>';
+  currentVariantId = null;
+  if (!routeId) { group.style.display = 'none'; return; }
+  try {
+    const variants = await fetch('/api/variants?routeId=' + routeId).then(r => r.json());
+    if (variants.length === 0) { group.style.display = 'none'; return; }
+    group.style.display = 'block';
+    variants.forEach(v => {
+      sel.innerHTML += `<option value="${v._id}">${v.name}</option>`;
+    });
+  } catch(e) { group.style.display = 'none'; }
+}
+
+// ── Start trip ────────────────────────────────────────────────────────────
+function startTrip() {
+  currentBus = document.getElementById('busSelect').value;
+  currentRouteId = document.getElementById('routeSelect').value;
+  const routeEl = document.getElementById('routeSelect');
+  currentRouteName = routeEl.options[routeEl.selectedIndex]?.dataset?.name || '';
+  currentVariantId = document.getElementById('variantSelect').value || null;
+
+  if (!currentBus)      { showToast('Select a bus', 'error'); return; }
+  if (!currentRouteId)  { showToast('Select a route', 'error'); return; }
+  if (!navigator.geolocation) { showToast('GPS not supported on this device', 'error'); return; }
+
+  setRing('connecting');
+  updateGpsChip('Requesting...');
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      tripActive = true;
+      document.getElementById('activeBusLabel').textContent = currentBus;
+      document.getElementById('activeRouteLabel').textContent = currentRouteName;
+
+      socket.emit('startTrip', {
+        busNumber: currentBus,
+        routeId: currentRouteId,
+        variantId: currentVariantId,
+        conductorId,
+        conductorName
+      });
+
+      saveTrip();
+      startWatching();
+    },
+    (err) => {
+      setRing('idle');
+      const msgs = { 1:'GPS permission denied. Enable location in browser settings.', 2:'GPS unavailable.', 3:'GPS timed out. Try again.' };
+      showToast(msgs[err.code] || 'GPS error', 'error');
+      updateGpsChip('Denied');
+    },
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+}
+
+// ── GPS Watch ─────────────────────────────────────────────────────────────
+function startWatching() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => handlePosition(pos),
+    (err) => {
+      updateGpsChip('Error');
+      addLog('⚠️ GPS error: ' + err.message);
+    },
+    { enableHighAccuracy: true, maximumAge: 8000, timeout: 20000 }
+  );
+}
+
+function handlePosition(pos) {
+  const { latitude, longitude, speed, heading, accuracy } = pos.coords;
+  const speedKmh = speed ? Math.round(speed * 3.6) : 0;
+  updateGpsChip(`±${Math.round(accuracy)}m`);
+  document.getElementById('speedLabel').textContent = speedKmh + ' km/h';
+  document.getElementById('accuracyLabel').textContent = '±' + Math.round(accuracy) + ' m';
+
+  const now = Date.now();
+  if (now - lastSendMs < 9500) return; // ~10s throttle
+  lastSendMs = now;
+
+  const payload = {
+    busNumber: currentBus,
+    routeId: currentRouteId,
+    variantId: currentVariantId,
+    latitude, longitude,
+    speed: speedKmh,
+    heading: heading || 0,
+    accuracy: Math.round(accuracy),
+    tripId: currentTripId
+  };
+
+  if (!isOnline) {
+    offlineQueue.push(payload);
+    updateQueueBanner();
+    addLog(`📦 Queued (offline): ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+    return;
+  }
+
+  sendUpdate(payload);
+}
+
+function sendUpdate(payload) {
+  socket.emit('locationUpdate', payload);
+  sentCount++;
+  document.getElementById('sentCount').textContent = sentCount;
+  document.getElementById('lastChip').textContent = '🕐 ' + new Date().toLocaleTimeString();
+  addLog(`📍 ${payload.latitude.toFixed(5)}, ${payload.longitude.toFixed(5)} • ${payload.speed} km/h`);
+}
+
+// ── Offline queue flushing ────────────────────────────────────────────────
+function flushQueue() {
+  if (!offlineQueue.length) return;
+  const count = offlineQueue.length;
+  while (offlineQueue.length) {
+    sendUpdate(offlineQueue.shift());
+  }
+  updateQueueBanner();
+  showToast(`📡 Synced ${count} queued updates`, 'success');
+}
+
+function updateQueueBanner() {
+  const banner = document.getElementById('queueBanner');
+  if (offlineQueue.length > 0) {
+    banner.style.display = 'flex';
+    document.getElementById('queueCount').textContent = offlineQueue.length;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// ── Stop trip ─────────────────────────────────────────────────────────────
+function confirmStop() {
+  if (!confirm('Stop trip for bus ' + currentBus + '?\nPassengers will no longer see this bus.')) return;
+  stopTrip();
+}
+
+function stopTrip() {
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  socket.emit('stopTrip', { busNumber: currentBus, tripId: currentTripId });
+  clearTrip();
+  setRing('idle');
+  showSetupPanel();
+  showToast('Trip stopped', '');
+}
+
+// ── UI helpers ─────────────────────────────────────────────────────────────
+function showActivePanel() {
+  document.getElementById('setupPanel').style.display = 'none';
+  document.getElementById('activePanel').style.display = 'block';
+  document.getElementById('activeBusLabel').textContent = currentBus;
+  document.getElementById('activeRouteLabel').textContent = currentRouteName;
+}
+
+function showSetupPanel() {
+  document.getElementById('setupPanel').style.display = 'block';
+  document.getElementById('activePanel').style.display = 'none';
+}
+
+function setRing(state) {
+  const ring = document.getElementById('statusRing');
+  const icon = document.getElementById('ringIcon');
+  const label = document.getElementById('ringLabel');
+  ring.className = 'status-ring ' + state;
+  const map = {
+    idle:       { icon:'🚌', label:'Ready' },
+    connecting: { icon:'⏳', label:'Getting GPS' },
+    active:     { icon:'📡', label:'Broadcasting' },
+    offline:    { icon:'⚠️', label:'Offline' }
+  };
+  icon.textContent  = map[state]?.icon  || '🚌';
+  label.textContent = map[state]?.label || state;
+}
+
+function updateGpsChip(txt) {
+  const chip = document.getElementById('gpsChip');
+  chip.textContent = '📍 GPS: ' + txt;
+  chip.className = 'info-chip ' + (txt.includes('Error') || txt.includes('Denied') ? 'bad' : txt === '—' ? '' : 'ok');
+}
+
+function updateNetChip(online) {
+  const chip = document.getElementById('netChip');
+  chip.textContent = '📶 ' + (online ? 'Online' : 'Offline');
+  chip.className = 'info-chip ' + (online ? 'ok' : 'bad');
+}
+
+function addLog(msg) {
+  const log = document.getElementById('gpsLog');
+  const d = document.createElement('div');
+  d.style.cssText = 'padding:2px 0;border-bottom:1px solid #f1f5f9';
+  d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  log.insertBefore(d, log.firstChild);
+  if (log.children.length > 30) log.removeChild(log.lastChild);
+}
+
+function showToast(msg, type = '') {
+  const container = document.getElementById('toastContainer') || (() => {
+    const c = document.createElement('div');
+    c.id = 'toastContainer';
+    c.className = 'toast-container';
+    document.body.appendChild(c);
+    return c;
+  })();
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  container.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ── Trip persistence (refresh recovery) ───────────────────────────────────
+function saveTrip() {
+  localStorage.setItem('activeTrip', JSON.stringify({
+    busNumber: currentBus,
+    routeId: currentRouteId,
+    routeName: currentRouteName,
+    variantId: currentVariantId,
+    tripId: currentTripId,
+    conductorId,
+    conductorName,
+    startedAt: Date.now()
+  }));
+}
+
+function clearTrip() {
+  tripActive = false;
+  currentBus = null;
+  currentTripId = null;
+  currentRouteId = null;
+  currentRouteName = null;
+  currentVariantId = null;
+  sentCount = 0;
+  offlineQueue = [];
+  localStorage.removeItem('activeTrip');
+  updateQueueBanner();
+}
+
+// ── Network events ────────────────────────────────────────────────────────
+const nb = document.getElementById('networkBanner');
+
+window.addEventListener('online', () => {
+  isOnline = true;
+  updateNetChip(true);
+  nb.className = 'network-banner online show';
+  nb.textContent = '✅ Back online — syncing GPS data...';
+  setTimeout(() => nb.classList.remove('show'), 3000);
+  if (tripActive) flushQueue();
+  if (tripActive) setRing('active');
+});
+
+window.addEventListener('offline', () => {
+  isOnline = false;
+  updateNetChip(false);
+  nb.className = 'network-banner offline show';
+  nb.textContent = '⚠️ No internet — GPS updates will be queued';
+  if (tripActive) setRing('offline');
+});
+
+// ── Page close warning ─────────────────────────────────────────────────────
+// IMPORTANT: Browsers cannot send GPS after tab is fully closed.
+// This warning gives conductor a chance to manually stop.
+window.addEventListener('beforeunload', (e) => {
+  if (!tripActive) return;
+  e.preventDefault();
+  e.returnValue = 'Your trip is still active! Closing this page will make you appear offline to passengers. Are you sure?';
+  return e.returnValue;
+});
+
+// ── Page visibility (screen lock / background tab) ────────────────────────
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && tripActive) {
+    // Reconnect & ensure GPS is still running
+    if (!socket.connected) socket.connect();
+    if (watchId === null) startWatching();
+    showToast('Welcome back! Trip is still active.', '');
+  }
+});
+
+// ── Logout ────────────────────────────────────────────────────────────────
+function logout() {
+  if (tripActive) {
+    if (!confirm('You have an active trip! Stop trip before logging out?')) return;
+    stopTrip();
+  }
+  localStorage.removeItem('conductorToken');
+  localStorage.removeItem('conductorUser');
+  localStorage.removeItem('conductorName');
+  localStorage.removeItem('conductorId');
+  localStorage.removeItem('activeTrip');
+  window.location.href = '/conductor';
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+updateNetChip(isOnline);
+
+connectSocket();
+loadData();
+
+// Restore active trip from localStorage (handles page refresh)
+if (savedTrip) {
+  currentBus       = savedTrip.busNumber;
+  currentRouteId   = savedTrip.routeId;
+  currentRouteName = savedTrip.routeName;
+  currentVariantId = savedTrip.variantId || null;
+  currentTripId    = savedTrip.tripId;
+  tripActive       = true;
+
+  document.getElementById('activeBusLabel').textContent = currentBus;
+  document.getElementById('activeRouteLabel').textContent = currentRouteName;
+
+  // socket.on('connect') will fire restoreTrip — just start GPS now
+  setRing('connecting');
+  showActivePanel();
+
+  // Wait for socket connect, then restore will be emitted in connectSocket()
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { startWatching(); setRing('active'); },
+    ()    => { setRing('offline'); showToast('Could not get GPS after refresh', 'error'); }
+  );
+}
+</script>
+<div class="toast-container" id="toastContainer"></div>
+</body>
+</html>

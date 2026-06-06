@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - KSRTC v2</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .section-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:28px; overflow:hidden; }
+    .sec-head { background:var(--primary); color:white; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; }
+    .sec-head h3 { font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700; }
+    .sec-body { padding:24px; }
+    .add-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid var(--border); }
+    .add-row .form-control { min-width:160px; flex:1; }
+    .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:99; }
+    .overlay.open { display:block; }
+    .mobile-toggle { display:none; position:fixed; bottom:20px; left:20px; z-index:200; background:var(--primary); color:white; border:none; width:50px; height:50px; border-radius:50%; font-size:20px; cursor:pointer; box-shadow:var(--shadow-lg); }
+    @media(max-width:768px){ .mobile-toggle{display:block;} }
+  </style>
+</head>
+<body>
+<div class="dashboard">
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <h2>⚙️ Admin v2</h2>
+    <p id="adminLabel">KSRTC Nippani</p>
+  </div>
+  <ul class="sidebar-nav">
+    <li><a href="#overview"   onclick="go('overview')"   class="active"><span class="nav-icon">📊</span> Overview</a></li>
+    <li><a href="#live"       onclick="go('live')"              ><span class="nav-icon">📍</span> Live Trips</a></li>
+    <li><a href="#conductors" onclick="go('conductors')"        ><span class="nav-icon">👤</span> Conductors</a></li>
+    <li><a href="#buses"      onclick="go('buses')"             ><span class="nav-icon">🚌</span> Buses</a></li>
+    <li><a href="#routes"     onclick="go('routes')"            ><span class="nav-icon">🗺️</span> Routes</a></li>
+    <li><a href="#timetable"  onclick="go('timetable')"         ><span class="nav-icon">🕐</span> Timetable</a></li>
+    <li><a href="#history"    onclick="go('history')"           ><span class="nav-icon">📋</span> Trip History</a></li>
+    <li style="margin-top:24px">
+      <a href="javascript:logout()" style="color:rgba(255,100,100,0.9)"><span class="nav-icon">🚪</span> Logout</a>
+    </li>
+  </ul>
+</aside>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<!-- MAIN CONTENT -->
+<main class="main-content">
+
+<!-- ── OVERVIEW ──────────────────────────────────────────────────────────── -->
+<div id="sec-overview">
+  <div class="page-header"><h1>Dashboard</h1><p>KSRTC Nippani Depot — v2</p></div>
+  <div class="grid-4" id="statsGrid">
+    <div class="stat-card"><div class="stat-icon blue">🚌</div><div><div class="stat-value" id="sBuses">—</div><div class="stat-label">Total Buses</div></div></div>
+    <div class="stat-card"><div class="stat-icon green">📍</div><div><div class="stat-value" id="sActive">—</div><div class="stat-label">Active Now</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange">👤</div><div><div class="stat-value" id="sConductors">—</div><div class="stat-label">Conductors</div></div></div>
+    <div class="stat-card"><div class="stat-icon purple">🗺️</div><div><div class="stat-value" id="sRoutes">—</div><div class="stat-label">Routes</div></div></div>
+  </div>
+  <div style="margin-top:24px;padding:18px;background:var(--surface2);border-radius:var(--radius);border:1px dashed var(--border)">
+    <strong>🔐 First-time setup?</strong>
+    <button class="btn btn-sm btn-outline" style="margin-left:12px" onclick="seed()">Seed Default Users</button>
+    <span style="font-size:13px;color:var(--text-muted);margin-left:8px">admin/ksrtc@2024 | conductor1,2 / pass@123</span>
+  </div>
+</div>
+
+<!-- ── LIVE TRIPS ────────────────────────────────────────────────────────── -->
+<div id="sec-live" style="display:none">
+  <div class="page-header">
+    <h1>📍 Live Trips</h1>
+    <p>All buses with GPS status</p>
+  </div>
+  <div class="section-card">
+    <div class="sec-head">
+      <h3>Active &amp; Recent Buses</h3>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white" onclick="loadLive()">🔄 Refresh</button>
+    </div>
+    <div class="sec-body live-table-wrap">
+      <table class="live-table">
+        <thead>
+          <tr><th>Bus</th><th>Conductor</th><th>Route</th><th>Coords</th><th>Last Update</th><th>Status</th><th>Action</th></tr>
+        </thead>
+        <tbody id="liveTable"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONDUCTORS ────────────────────────────────────────────────────────── -->
+<div id="sec-conductors" style="display:none">
+  <div class="page-header"><h1>👤 Conductor Management</h1><p>Add, edit, delete conductors</p></div>
+
+  <div class="section-card">
+    <div class="sec-head"><h3>All Conductors</h3>
+      <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white" onclick="openAddConductor()">+ Add Conductor</button>
+    </div>
+    <div class="sec-body">
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>#</th><th>Employee ID</th><th>Name</th><th>Username</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="conductorTable"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── BUSES ──────────────────────────────────────────────────────────────── -->
+<div id="sec-buses" style="display:none">
+  <div class="page-header"><h1>🚌 Bus Management</h1></div>
+  <div class="section-card">
+    <div class="sec-head"><h3>Fleet</h3></div>
+    <div class="sec-body">
+      <div class="add-row">
+        <input class="form-control" id="newBus" type="text" placeholder="Bus No. e.g. KA22F1234" style="text-transform:uppercase;max-width:240px"/>
+        <button class="btn btn-primary" onclick="addBus()">+ Add Bus</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>#</th><th>Bus Number</th><th>Added</th><th>Action</th></tr></thead>
+          <tbody id="busTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ROUTES ─────────────────────────────────────────────────────────────── -->
+<div id="sec-routes" style="display:none">
+  <div class="page-header"><h1>🗺️ Route Management</h1><p>Routes → Variants → Stops</p></div>
+
+  <!-- Three-panel layout: Routes | Variants | Stops -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:start" id="routePanel">
+
+    <!-- ROUTES -->
+    <div class="section-card">
+      <div class="sec-head"><h3>Routes</h3></div>
+      <div class="sec-body">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <input class="form-control" id="rSrc" placeholder="Source (e.g. Nippani)"/>
+          <input class="form-control" id="rDst" placeholder="Destination (e.g. Ichalkaranji)"/>
+          <button class="btn btn-primary" onclick="addRoute()">+ Add Route</button>
+        </div>
+        <div id="routeListItems" style="display:flex;flex-direction:column;gap:4px">
+          <p style="color:var(--text-muted);font-size:13px">Loading...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- VARIANTS -->
+    <div class="section-card" id="variantPanel" style="opacity:0.4;pointer-events:none">
+      <div class="sec-head">
+        <h3>Variants</h3>
+        <span id="variantRouteLabel" style="font-size:12px;opacity:0.8">Select a route</span>
+      </div>
+      <div class="sec-body">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <input class="form-control" id="vName" placeholder="e.g. Via Sadalaga Bypass"/>
+          <button class="btn btn-primary" onclick="addVariant()">+ Add Variant</button>
+        </div>
+        <div id="variantListItems" style="display:flex;flex-direction:column;gap:4px">
+          <p style="color:var(--text-muted);font-size:13px">Select a route first</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STOPS -->
+    <div class="section-card" id="stopPanel" style="opacity:0.4;pointer-events:none">
+      <div class="sec-head">
+        <h3>Stops</h3>
+        <span id="stopVariantLabel" style="font-size:12px;opacity:0.8">Select a variant</span>
+      </div>
+      <div class="sec-body">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+          <input class="form-control" id="sName" placeholder="Stop name (e.g. Kurli)"/>
+          <button class="btn btn-primary" onclick="addStop()">+ Add Stop</button>
+        </div>
+        <div id="stopListItems" style="display:flex;flex-direction:column;gap:4px">
+          <p style="color:var(--text-muted);font-size:13px">Select a variant first</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <style>
+    .route-item, .variant-item, .stop-item {
+      display:flex; align-items:center; gap:8px; padding:10px 12px;
+      border-radius:8px; cursor:pointer; border:2px solid transparent;
+      background:var(--surface2); font-size:14px; transition:all 0.15s;
+    }
+    .route-item:hover, .variant-item:hover { background:#dbeafe; }
+    .route-item.selected { border-color:var(--primary); background:#dbeafe; font-weight:600; }
+    .variant-item.selected { border-color:var(--success); background:#dcfce7; font-weight:600; }
+    .stop-item { cursor:default; background:white; border:1px solid var(--border); }
+    .stop-order { width:22px; height:22px; border-radius:50%; background:var(--primary); color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .stop-name { flex:1; }
+    .item-del { background:none; border:none; cursor:pointer; color:var(--danger); font-size:16px; padding:2px 4px; border-radius:4px; }
+    .item-del:hover { background:#fee2e2; }
+    .item-edit { background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; padding:2px 4px; border-radius:4px; }
+    .item-edit:hover { background:#e2e8f0; }
+    @media(max-width:900px){ #routePanel { grid-template-columns:1fr; } }
+  </style>
+</div>
+
+<!-- ── TIMETABLE ──────────────────────────────────────────────────────────── -->
+<div id="sec-timetable" style="display:none">
+  <div class="page-header"><h1>🕐 Timetable</h1></div>
+  <div class="section-card">
+    <div class="sec-head"><h3>Schedules</h3></div>
+    <div class="sec-body">
+      <div class="add-row">
+        <select class="form-control form-select" id="ttRoute" style="max-width:260px"><option value="">Select Route...</option></select>
+        <input class="form-control" id="ttTime" type="time" style="max-width:150px"/>
+        <button class="btn btn-primary" onclick="addTimetable()">+ Add</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>#</th><th>Route</th><th>Departure</th><th>Action</th></tr></thead>
+          <tbody id="ttTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── HISTORY ────────────────────────────────────────────────────────────── -->
+<div id="sec-history" style="display:none">
+  <div class="page-header"><h1>📋 Trip History</h1><p>Completed trips archive</p></div>
+  <div class="section-card">
+    <div class="sec-head"><h3>Recent Trips</h3></div>
+    <div class="sec-body">
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Bus</th><th>Conductor</th><th>Route</th><th>Started</th><th>Ended</th><th>Duration</th><th>End Reason</th></tr></thead>
+          <tbody id="histTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div><!-- /dashboard -->
+
+<!-- MOBILE TOGGLE -->
+<button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
+
+<!-- ── CONDUCTOR MODAL ────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="conductorModal">
+  <div class="modal">
+    <h2 class="modal-title" id="modalTitle">Add Conductor</h2>
+    <input type="hidden" id="editId"/>
+    <div class="modal-grid">
+      <div class="form-group">
+        <label class="form-label">Full Name *</label>
+        <input class="form-control" id="cName" placeholder="e.g. Raju Patil"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Employee ID *</label>
+        <input class="form-control" id="cEmpId" placeholder="e.g. EMP003" style="text-transform:uppercase"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Username *</label>
+        <input class="form-control" id="cUsername" placeholder="e.g. conductor3"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mobile (10 digits) *</label>
+        <input class="form-control" id="cMobile" type="tel" placeholder="9876543210" maxlength="10"/>
+      </div>
+      <div class="form-group" id="passwordGroup">
+        <label class="form-label">Password * (min 6 chars)</label>
+        <input class="form-control" id="cPassword" type="password" placeholder="••••••••"/>
+      </div>
+      <div class="form-group" id="editPasswordGroup" style="display:none">
+        <label class="form-label">New Password (leave blank to keep)</label>
+        <input class="form-control" id="cPasswordEdit" type="password" placeholder="Leave blank to keep current"/>
+      </div>
+    </div>
+    <div id="conductorModalAlert" style="display:none"></div>
+    <div style="display:flex;gap:12px;margin-top:20px">
+      <button class="btn btn-primary" id="saveBtn" onclick="saveConductor()">Save Conductor</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const token = localStorage.getItem('adminToken');
+if (!token) window.location.href = '/admin';
+document.getElementById('adminLabel').textContent = localStorage.getItem('adminUser') || 'Admin';
+
+const H = { 'Content-Type':'application/json', 'Authorization':'Bearer '+token };
+
+// ── Socket for live updates ────────────────────────────────────────────────
+const socket = io();
+socket.on('busActive',   () => { if (currentSection==='live')    loadLive(); if(currentSection==='overview') loadStats(); });
+socket.on('busInactive', () => { if (currentSection==='live')    loadLive(); if(currentSection==='overview') loadStats(); });
+socket.on('busStatus',   () => { if (currentSection==='live')    loadLive(); });
+socket.on('globalLocationUpdate', () => { /* update live table periodically */ });
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+let currentSection = 'overview';
+function go(name) {
+  document.querySelectorAll('[id^="sec-"]').forEach(s => s.style.display='none');
+  document.getElementById('sec-'+name).style.display='block';
+  document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+  document.querySelector(`.sidebar-nav a[href="#${name}"]`)?.classList.add('active');
+  currentSection = name;
+  closeSidebar();
+  const loaders = { overview:loadStats, live:loadLive, conductors:loadConductors, buses:loadBuses, routes:loadRoutes, timetable:()=>{loadRoutes();loadTimetable();}, history:loadHistory };
+  loaders[name]?.();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const [buses, routes, conductors, live] = await Promise.all([
+      fetch('/api/buses').then(r=>r.json()),
+      fetch('/api/routes').then(r=>r.json()),
+      fetch('/api/conductors', {headers:H}).then(r=>r.json()),
+      fetch('/api/live/active').then(r=>r.json())
+    ]);
+    document.getElementById('sBuses').textContent      = buses.length;
+    document.getElementById('sActive').textContent     = live.length;
+    document.getElementById('sConductors').textContent = Array.isArray(conductors) ? conductors.length : '—';
+    document.getElementById('sRoutes').textContent     = routes.length;
+  } catch(e) {}
+}
+
+// ── Live Trips ─────────────────────────────────────────────────────────────
+async function loadLive() {
+  try {
+    const buses = await fetch('/api/live/all', {headers:H}).then(r=>r.json());
+    const tb = document.getElementById('liveTable');
+    if (!buses.length) {
+      tb.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">No active trips</td></tr>';
+      return;
+    }
+    const STATUS = {
+      active:'<span class="status-badge badge-active">🟢 Active</span>',
+      offline:'<span class="status-badge badge-offline">🟡 Offline</span>',
+      disconnected:'<span class="status-badge badge-disconnected">🔴 Disconnected</span>'
+    };
+    tb.innerHTML = buses.map(b => {
+      const ago = b.updatedAt ? timeSince(new Date(b.updatedAt)) : '—';
+      const route = b.routeId ? `${b.routeId.source} → ${b.routeId.destination}` : '—';
+      const cond  = b.conductorId ? `${b.conductorId.name || '—'} (${b.conductorId.username || '—'})` : b.conductorName || '—';
+      const coords = b.latitude ? `${b.latitude.toFixed(4)}, ${b.longitude.toFixed(4)}` : '—';
+      return `<tr>
+        <td><span class="bus-num">${b.busNumber}</span></td>
+        <td>${cond}</td>
+        <td>${route}</td>
+        <td style="font-family:monospace;font-size:12px">${coords}</td>
+        <td><span class="ago-text">${ago}</span></td>
+        <td>${STATUS[b.status] || STATUS.active}</td>
+        <td><a href="/track?bus=${b.busNumber}" target="_blank" class="btn btn-sm btn-outline">Map</a></td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.error(e); }
+}
+
+function timeSince(d) {
+  const secs = Math.round((Date.now()-d)/1000);
+  if (secs<15) return 'just now';
+  if (secs<60) return secs+'s ago';
+  if (secs<3600) return Math.round(secs/60)+'m ago';
+  return Math.round(secs/3600)+'h ago';
+}
+
+// ── Conductors ─────────────────────────────────────────────────────────────
+async function loadConductors() {
+  try {
+    const list = await fetch('/api/conductors', {headers:H}).then(r=>r.json());
+    const tb = document.getElementById('conductorTable');
+    if (!list.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">No conductors yet. Add one above.</td></tr>'; return; }
+    tb.innerHTML = list.map((c,i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td><strong>${c.employeeId}</strong></td>
+        <td>${c.name}</td>
+        <td>${c.username}</td>
+        <td>${c.mobile}</td>
+        <td><span class="status-badge ${c.isActive?'badge-active':'badge-ended'}">${c.isActive?'Active':'Disabled'}</span></td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="openEditConductor('${c._id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteConductor('${c._id}','${c.name}')">Delete</button>
+        </td>
+      </tr>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+let conductorsCache = {};
+function openAddConductor() {
+  document.getElementById('editId').value = '';
+  document.getElementById('modalTitle').textContent = 'Add Conductor';
+  ['cName','cEmpId','cUsername','cMobile','cPassword','cPasswordEdit'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('passwordGroup').style.display='block';
+  document.getElementById('editPasswordGroup').style.display='none';
+  document.getElementById('conductorModalAlert').style.display='none';
+  document.getElementById('conductorModal').classList.add('open');
+}
+
+async function openEditConductor(id) {
+  try {
+    const c = await fetch(`/api/conductors/${id}`, {headers:H}).then(r=>r.json());
+    document.getElementById('editId').value = id;
+    document.getElementById('modalTitle').textContent = 'Edit Conductor';
+    document.getElementById('cName').value     = c.name;
+    document.getElementById('cEmpId').value    = c.employeeId;
+    document.getElementById('cUsername').value = c.username;
+    document.getElementById('cMobile').value   = c.mobile;
+    document.getElementById('cPassword').value = '';
+    document.getElementById('cPasswordEdit').value = '';
+    document.getElementById('passwordGroup').style.display='none';
+    document.getElementById('editPasswordGroup').style.display='block';
+    document.getElementById('conductorModalAlert').style.display='none';
+    document.getElementById('conductorModal').classList.add('open');
+  } catch(e) { showToast('Could not load conductor','error'); }
+}
+
+function closeModal() {
+  document.getElementById('conductorModal').classList.remove('open');
+}
+
+async function saveConductor() {
+  const id       = document.getElementById('editId').value;
+  const isEdit   = !!id;
+  const name     = document.getElementById('cName').value.trim();
+  const empId    = document.getElementById('cEmpId').value.trim();
+  const username = document.getElementById('cUsername').value.trim();
+  const mobile   = document.getElementById('cMobile').value.trim();
+  const password = isEdit
+    ? document.getElementById('cPasswordEdit').value
+    : document.getElementById('cPassword').value;
+
+  if (!name||!empId||!username||!mobile) {
+    showModalAlert('All fields except password (edit) are required.'); return;
+  }
+  if (!/^\d{10}$/.test(mobile)) {
+    showModalAlert('Mobile must be exactly 10 digits.'); return;
+  }
+  if (!isEdit && password.length < 6) {
+    showModalAlert('Password must be at least 6 characters.'); return;
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.innerHTML='<span class="spinner"></span> Saving...';
+  btn.disabled=true;
+
+  try {
+    const body = { name, employeeId:empId, username, mobile };
+    if (password) body.password = password;
+    const url = isEdit ? `/api/conductors/${id}` : '/api/conductors';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res = await fetch(url, {method, headers:H, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+    closeModal();
+    showToast(isEdit ? 'Conductor updated!' : 'Conductor created!', 'success');
+    loadConductors();
+  } catch(err) {
+    showModalAlert(err.message);
+  } finally {
+    btn.innerHTML='Save Conductor'; btn.disabled=false;
+  }
+}
+
+async function deleteConductor(id, name) {
+  if (!confirm(`Delete conductor "${name}"? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/conductors/${id}`, {method:'DELETE', headers:H});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+    showToast('Conductor deleted','');
+    loadConductors();
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+function showModalAlert(msg) {
+  const box = document.getElementById('conductorModalAlert');
+  box.style.display='flex'; box.className='alert alert-error'; box.textContent='❌ '+msg;
+}
+
+// ── Buses ──────────────────────────────────────────────────────────────────
+async function loadBuses() {
+  const list = await fetch('/api/buses').then(r=>r.json()).catch(()=>[]);
+  const tb = document.getElementById('busTable');
+  if (!list.length) { tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">No buses yet.</td></tr>'; return; }
+  tb.innerHTML = list.map((b,i)=>`
+    <tr><td>${i+1}</td><td><strong>${b.busNumber}</strong></td><td>${new Date(b.createdAt).toLocaleDateString()}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteBus('${b._id}','${b.busNumber}')">Delete</button></td></tr>`).join('');
+}
+async function addBus() {
+  const bn = document.getElementById('newBus').value.trim().toUpperCase();
+  if (!bn) { showToast('Enter bus number','error'); return; }
+  const res = await fetch('/api/buses',{method:'POST',headers:H,body:JSON.stringify({busNumber:bn})});
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  document.getElementById('newBus').value='';
+  showToast('Bus added!','success'); loadBuses();
+}
+async function deleteBus(id,bn) {
+  if (!confirm(`Delete bus ${bn}?`)) return;
+  await fetch(`/api/buses/${id}`,{method:'DELETE',headers:H});
+  showToast('Deleted',''); loadBuses();
+}
+
+// ── Routes / Variants / Stops ─────────────────────────────────────────────
+let selectedRouteId = null;
+let selectedVariantId = null;
+
+async function loadRoutes() {
+  const list = await fetch('/api/routes').then(r=>r.json()).catch(()=>[]);
+  // Update timetable dropdown
+  const sel = document.getElementById('ttRoute');
+  if (sel) {
+    sel.innerHTML = '<option value="">Select Route...</option>';
+    list.forEach(r => sel.innerHTML += `<option value="${r._id}">${r.source} → ${r.destination}</option>`);
+  }
+  // Update route list in route panel
+  const container = document.getElementById('routeListItems');
+  if (!container) return;
+  if (!list.length) {
+    container.innerHTML='<p style="color:var(--text-muted);font-size:13px">No routes yet. Add one above.</p>';
+    return;
+  }
+  container.innerHTML = list.map(r => `
+    <div class="route-item ${r._id===selectedRouteId?'selected':''}" onclick="selectRoute('${r._id}','${r.source}','${r.destination}')">
+      <span style="flex:1">${r.source} <span style="color:var(--text-muted)">→</span> ${r.destination}</span>
+      <button class="item-edit" onclick="event.stopPropagation();editRoute('${r._id}','${r.source}','${r.destination}')" title="Edit">✏️</button>
+      <button class="item-del" onclick="event.stopPropagation();deleteRoute('${r._id}')" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+async function addRoute() {
+  const src=document.getElementById('rSrc').value.trim(), dst=document.getElementById('rDst').value.trim();
+  if (!src||!dst) { showToast('Enter source and destination','error'); return; }
+  const res=await fetch('/api/routes',{method:'POST',headers:H,body:JSON.stringify({source:src,destination:dst})});
+  const d=await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  document.getElementById('rSrc').value=''; document.getElementById('rDst').value='';
+  showToast('Route added!','success'); loadRoutes();
+}
+
+async function editRoute(id, src, dst) {
+  const newSrc = prompt('Source:', src); if (newSrc===null) return;
+  const newDst = prompt('Destination:', dst); if (newDst===null) return;
+  const res = await fetch(`/api/routes/${id}`,{method:'PUT',headers:H,body:JSON.stringify({source:newSrc.trim(),destination:newDst.trim()})});
+  if (!res.ok) { const d=await res.json(); showToast(d.message,'error'); return; }
+  showToast('Route updated!','success'); loadRoutes();
+  if (selectedRouteId===id) document.getElementById('variantRouteLabel').textContent = newSrc.trim()+' → '+newDst.trim();
+}
+
+async function deleteRoute(id) {
+  if (!confirm('Delete this route and ALL its variants and stops?')) return;
+  const res=await fetch(`/api/routes/${id}`,{method:'DELETE',headers:H});
+  const d=await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  showToast('Route deleted','');
+  if (selectedRouteId===id) { selectedRouteId=null; clearVariantPanel(); clearStopPanel(); }
+  loadRoutes();
+}
+
+function selectRoute(id, src, dst) {
+  selectedRouteId = id;
+  selectedVariantId = null;
+  loadRoutes(); // re-render to highlight
+  // Activate variant panel
+  const vp = document.getElementById('variantPanel');
+  vp.style.opacity='1'; vp.style.pointerEvents='all';
+  document.getElementById('variantRouteLabel').textContent = src+' → '+dst;
+  loadVariants();
+  clearStopPanel();
+}
+
+// ── Variants ───────────────────────────────────────────────────────────────
+async function loadVariants() {
+  if (!selectedRouteId) return;
+  const list = await fetch('/api/variants?routeId='+selectedRouteId).then(r=>r.json()).catch(()=>[]);
+  const container = document.getElementById('variantListItems');
+  if (!list.length) {
+    container.innerHTML='<p style="color:var(--text-muted);font-size:13px">No variants yet. Add one above.</p>';
+    return;
+  }
+  container.innerHTML = list.map(v => `
+    <div class="variant-item ${v._id===selectedVariantId?'selected':''}" onclick="selectVariant('${v._id}','${v.name.replace(/'/g,"\'")}')">
+      <span style="flex:1">${v.name}</span>
+      <button class="item-edit" onclick="event.stopPropagation();editVariant('${v._id}','${v.name.replace(/'/g,"\'")}')">✏️</button>
+      <button class="item-del" onclick="event.stopPropagation();deleteVariant('${v._id}')">✕</button>
+    </div>`).join('');
+}
+
+async function addVariant() {
+  if (!selectedRouteId) { showToast('Select a route first','error'); return; }
+  const name = document.getElementById('vName').value.trim();
+  if (!name) { showToast('Enter variant name','error'); return; }
+  const res=await fetch('/api/variants',{method:'POST',headers:H,body:JSON.stringify({routeId:selectedRouteId,name})});
+  const d=await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  document.getElementById('vName').value='';
+  showToast('Variant added!','success'); loadVariants();
+}
+
+async function editVariant(id, current) {
+  const name = prompt('Variant name:', current); if (!name) return;
+  const res=await fetch(`/api/variants/${id}`,{method:'PUT',headers:H,body:JSON.stringify({name:name.trim()})});
+  const d=await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  showToast('Updated!','success'); loadVariants();
+  if (selectedVariantId===id) document.getElementById('stopVariantLabel').textContent=name.trim();
+}
+
+async function deleteVariant(id) {
+  if (!confirm('Delete this variant and all its stops?')) return;
+  const res=await fetch(`/api/variants/${id}`,{method:'DELETE',headers:H});
+  const d=await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  showToast('Variant deleted','');
+  if (selectedVariantId===id) { selectedVariantId=null; clearStopPanel(); }
+  loadVariants();
+}
+
+function selectVariant(id, name) {
+  selectedVariantId = id;
+  loadVariants(); // re-render to highlight
+  const sp = document.getElementById('stopPanel');
+  sp.style.opacity='1'; sp.style.pointerEvents='all';
+  document.getElementById('stopVariantLabel').textContent = name;
+  loadStops();
+}
+
+function clearVariantPanel() {
+  const vp = document.getElementById('variantPanel');
+  vp.style.opacity='0.4'; vp.style.pointerEvents='none';
+  document.getElementById('variantRouteLabel').textContent='Select a route';
+  document.getElementById('variantListItems').innerHTML='<p style="color:var(--text-muted);font-size:13px">Select a route first</p>';
+}
+
+// ── Stops ──────────────────────────────────────────────────────────────────
+async function loadStops() {
+  if (!selectedVariantId) return;
+  const list = await fetch('/api/variants/'+selectedVariantId+'/stops').then(r=>r.json()).catch(()=>[]);
+  const container = document.getElementById('stopListItems');
+  if (!list.length) {
+    container.innerHTML='<p style="color:var(--text-muted);font-size:13px">No stops yet. Add above.</p>';
+    return;
+  }
+  container.innerHTML = list.map(s => `
+    <div class="stop-item">
+      <div class="stop-order">${s.order}</div>
+      <span class="stop-name">${s.name}</span>
+      <button class="item-edit" onclick="editStop('${s._id}','${s.name.replace(/'/g,"\'")}')" title="Edit">✏️</button>
+      <button class="item-del" onclick="deleteStop('${s._id}','${s.name.replace(/'/g,"\'")}')">✕</button>
+    </div>`).join('');
+}
+
+async function addStop() {
+  if (!selectedVariantId) { showToast('Select a variant first','error'); return; }
+  const name = document.getElementById('sName').value.trim();
+  if (!name) { showToast('Enter stop name','error'); return; }
+  const res=await fetch('/api/variants/'+selectedVariantId+'/stops',{method:'POST',headers:H,body:JSON.stringify({name})});
+  const d=await res.json();
+  if (!res.ok) { showToast(d.message,'error'); return; }
+  document.getElementById('sName').value='';
+  showToast(name+' added!','success'); loadStops();
+}
+
+async function editStop(id, current) {
+  const name = prompt('Stop name:', current); if (!name) return;
+  const res=await fetch('/api/variants/'+selectedVariantId+'/stops/'+id,{method:'PUT',headers:H,body:JSON.stringify({name:name.trim()})});
+  if (!res.ok) { showToast('Failed to update','error'); return; }
+  showToast('Updated!','success'); loadStops();
+}
+
+async function deleteStop(id, name) {
+  if (!confirm('Delete stop "'+name+'"?')) return;
+  await fetch('/api/variants/'+selectedVariantId+'/stops/'+id,{method:'DELETE',headers:H});
+  showToast('Stop deleted',''); loadStops();
+}
+
+function clearStopPanel() {
+  const sp = document.getElementById('stopPanel');
+  sp.style.opacity='0.4'; sp.style.pointerEvents='none';
+  document.getElementById('stopVariantLabel').textContent='Select a variant';
+  document.getElementById('stopListItems').innerHTML='<p style="color:var(--text-muted);font-size:13px">Select a variant first</p>';
+}
+
+// ── Timetable ──────────────────────────────────────────────────────────────
+async function loadTimetable() {
+  const list = await fetch('/api/timetables').then(r=>r.json()).catch(()=>[]);
+  const tb = document.getElementById('ttTable');
+  if (!list.length) { tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">No schedules yet.</td></tr>'; return; }
+  tb.innerHTML = list.map((t,i)=>`
+    <tr><td>${i+1}</td><td>${t.routeId?`${t.routeId.source} → ${t.routeId.destination}`:'—'}</td>
+    <td><span class="time-chip">${t.departureTime}</span></td>
+    <td>
+      <button class="btn btn-sm btn-outline" onclick="editTime('${t._id}','${t.departureTime}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="delTime('${t._id}')">Del</button>
+    </td></tr>`).join('');
+}
+async function addTimetable() {
+  const routeId=document.getElementById('ttRoute').value, tv=document.getElementById('ttTime').value;
+  if (!routeId||!tv) { showToast('Select route and time','error'); return; }
+  const [h,m]=tv.split(':'); const hour=parseInt(h);
+  const formatted=`${(hour%12||12).toString().padStart(2,'0')}:${m} ${hour>=12?'PM':'AM'}`;
+  const res=await fetch('/api/timetables',{method:'POST',headers:H,body:JSON.stringify({routeId,departureTime:formatted})});
+  if (!res.ok) { showToast('Failed','error'); return; }
+  document.getElementById('ttTime').value='';
+  showToast('Added!','success'); loadTimetable();
+}
+async function editTime(id,cur) {
+  const nw=prompt('Edit time (e.g. 08:30 AM):',cur);
+  if (!nw) return;
+  await fetch(`/api/timetables/${id}`,{method:'PUT',headers:H,body:JSON.stringify({departureTime:nw})});
+  showToast('Updated!','success'); loadTimetable();
+}
+async function delTime(id) {
+  if (!confirm('Delete?')) return;
+  await fetch(`/api/timetables/${id}`,{method:'DELETE',headers:H});
+  showToast('Deleted',''); loadTimetable();
+}
+
+// ── Trip History ───────────────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const list = await fetch('/api/trips?limit=50',{headers:H}).then(r=>r.json());
+    const tb = document.getElementById('histTable');
+    if (!list.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">No trips yet.</td></tr>'; return; }
+    tb.innerHTML = list.map(t=>`<tr>
+      <td><strong>${t.busNumber}</strong></td>
+      <td>${t.conductorId?.name||t.conductorName||'—'}</td>
+      <td>${t.routeId?`${t.routeId.source} → ${t.routeId.destination}`:'—'}</td>
+      <td style="font-size:12px">${t.startedAt?new Date(t.startedAt).toLocaleString():'-'}</td>
+      <td style="font-size:12px">${t.endedAt?new Date(t.endedAt).toLocaleString():'-'}</td>
+      <td>${t.durationMinutes!=null?t.durationMinutes+' min':'—'}</td>
+      <td><span class="status-badge badge-${t.endReason==='manual'?'active':'offline'}">${t.endReason||'—'}</span></td>
+    </tr>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+// ── Seed ──────────────────────────────────────────────────────────────────
+async function seed() {
+  const r = await fetch('/api/auth/seed',{method:'POST'});
+  const d = await r.json();
+  showToast(d.message,'success');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function showToast(msg,type='') {
+  const t=document.createElement('div'); t.className='toast '+type; t.textContent=msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
+
+function logout() {
+  localStorage.removeItem('adminToken'); localStorage.removeItem('adminUser');
+  window.location.href='/admin';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+loadStats();
+// Auto-refresh live section every 15s
+setInterval(() => { if (currentSection==='live') loadLive(); }, 15000);
+</script>
+</body>
+</html>

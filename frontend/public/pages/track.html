@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Track Bus - KSRTC Nippani</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    #map { height: 380px; border-radius: var(--radius); overflow:hidden; }
+    .track-layout { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
+    @media(max-width:860px){ .track-layout { grid-template-columns:1fr; } }
+    .search-top { background:white; border-bottom:1px solid var(--border); padding:12px 20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .route-line { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; }
+    .route-dot  { width:10px; height:10px; border-radius:50%; background:var(--primary); }
+    .route-line-bar { flex:1; height:2px; background:var(--primary); min-width:30px; }
+    /* Stop progress */
+    .stop-progress-item { display:flex; align-items:center; gap:12px; padding:8px 0; position:relative; }
+    .stop-progress-item:not(:last-child)::after { content:''; position:absolute; left:10px; top:28px; width:2px; height:100%; background:#e2e8f0; z-index:0; }
+    .stop-progress-item.completed::after { background:#16a34a; }
+    .stop-dot { width:22px; height:22px; border-radius:50%; border:2px solid #e2e8f0; background:white; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; z-index:1; position:relative; transition:all 0.3s; }
+    .stop-dot.completed { background:#16a34a; border-color:#16a34a; color:white; }
+    .stop-dot.current   { background:var(--primary); border-color:var(--primary); color:white; box-shadow:0 0 0 4px rgba(0,82,165,0.2); animation:stopPulse 1.5s infinite; }
+    .stop-dot.upcoming  { background:#f1f5f9; border-color:#cbd5e1; color:var(--text-muted); }
+    @keyframes stopPulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,82,165,0.4)} 50%{box-shadow:0 0 0 6px rgba(0,82,165,0)} }
+    .stop-label { font-size:14px; font-weight:500; }
+    .stop-label.completed { color:var(--text-muted); text-decoration:line-through; }
+    .stop-label.current   { color:var(--primary); font-weight:700; }
+    .stop-label.upcoming  { color:var(--text); }
+    .stop-tag { font-size:11px; margin-left:4px; padding:2px 6px; border-radius:100px; }
+    .stop-tag.current-tag   { background:#dbeafe; color:var(--primary); }
+    .stop-tag.completed-tag { background:#f1f5f9; color:var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="/" class="navbar-brand">
+    <div class="navbar-logo">KSRTC</div>
+    <div><div class="navbar-title">Nippani Depot</div><div class="navbar-subtitle">Live Tracker</div></div>
+  </a>
+  <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+  <ul class="navbar-nav" id="navMenu">
+    <li><a href="/">🏠 Home</a></li>
+    <li><a href="/track" class="active">📍 Track</a></li>
+    <li><a href="/timetable">🕐 Timetable</a></li>
+  </ul>
+</nav>
+
+<div class="search-top">
+  <input type="text" id="busInput" class="form-control" style="max-width:200px" placeholder="Bus No. e.g. KA22F1234"/>
+  <select id="routeSelect" class="form-control form-select" style="max-width:260px">
+    <option value="">Or select route...</option>
+  </select>
+  <button class="btn btn-primary" onclick="doSearch()">🔍 Track</button>
+  <a href="/" class="btn btn-outline btn-sm">← Home</a>
+</div>
+
+<div class="container" style="padding-top:24px;padding-bottom:48px">
+
+  <!-- EMPTY / ERROR -->
+  <div id="emptyState">
+    <div class="empty-state" style="padding:60px 20px">
+      <div class="empty-state-icon">🚌</div>
+      <h3 id="emptyTitle">Search for a Bus</h3>
+      <p id="emptyMsg">Enter a bus number or select a route above.</p>
+    </div>
+  </div>
+
+  <!-- MULTIPLE BUSES -->
+  <div id="busListView" style="display:none">
+    <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;margin-bottom:16px">Buses on Route</h2>
+    <div id="busList" class="grid-3"></div>
+  </div>
+
+  <!-- SINGLE BUS TRACKING -->
+  <div id="trackView" style="display:none">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px">
+      <div>
+        <h1 id="busTitle" style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1">—</h1>
+        <div class="route-line" style="margin-top:6px">
+          <span class="route-dot"></span>
+          <span id="routeFrom">—</span>
+          <div class="route-line-bar"></div>
+          <span class="route-dot"></span>
+          <span id="routeTo">—</span>
+        </div>
+      </div>
+      <div style="margin-left:auto">
+        <span id="statusBadge" class="status-badge badge-active"><span class="live-dot"></span> Live</span>
+      </div>
+    </div>
+
+    <div class="track-layout">
+      <!-- MAP -->
+      <div>
+        <div id="map"></div>
+        <div class="last-updated-bar" id="lastUpdatedBar">
+          🕐 Last updated: <span id="lastUpdatedText">—</span>
+        </div>
+        <div class="track-stats-row">
+          <div class="track-stat">
+            <div class="track-stat-value" id="statSpeed">— km/h</div>
+            <div class="track-stat-label">Speed</div>
+          </div>
+          <div class="track-stat">
+            <div class="track-stat-value" id="statEta">—</div>
+            <div class="track-stat-label">ETA</div>
+          </div>
+          <div class="track-stat">
+            <div class="track-stat-value" id="statDist">—</div>
+            <div class="track-stat-label">Distance</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INFO PANEL -->
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="info-row"><span class="info-label">Bus</span><span class="info-value" id="infoBus">—</span></div>
+          <div class="info-row"><span class="info-label">Conductor</span><span class="info-value" id="infoConductor">—</span></div>
+          <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="infoStatus">—</span></div>
+          <div class="info-row"><span class="info-label">Coordinates</span><span class="info-value" id="infoCoords" style="font-family:monospace;font-size:12px">—</span></div>
+          <div class="info-row"><span class="info-label">Accuracy</span><span class="info-value" id="infoAccuracy">—</span></div>
+        </div>
+        <a href="/timetable" class="btn btn-outline btn-block">🕐 View Timetable</a>
+      </div>
+    </div>
+
+    <!-- STOP PROGRESS (shown only when variant data available) -->
+    <div id="stopProgressPanel" style="display:none;margin-top:20px">
+      <div class="card">
+        <div class="card-header" style="padding-bottom:12px">
+          <div>
+            <div class="card-title">🚏 Route Stops</div>
+            <div id="variantNameLabel" style="font-size:13px;color:var(--text-muted);margin-top:2px"></div>
+          </div>
+        </div>
+        <div id="stopProgressList" style="padding-top:4px"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<footer class="footer"><strong>KSRTC Nippani Depot</strong> — Live Bus Tracking</footer>
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let map, busMarker, polyline;
+let currentBus = null;
+let lastUpdateTime = null;
+let pathPoints = [];
+let lastUpdatedTimer;
+let currentLat, currentLng;
+
+document.getElementById('hamburger').addEventListener('click', () => {
+  document.getElementById('navMenu').classList.toggle('open');
+});
+
+// ── Parse URL ──────────────────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
+const busParam   = params.get('bus');
+const routeParam = params.get('route');
+const fromParam  = params.get('from');
+const toParam    = params.get('to');
+
+// ── Load routes dropdown ───────────────────────────────────────────────────
+async function loadRoutes() {
+  const routes = await fetch('/api/routes').then(r=>r.json()).catch(()=>[]);
+  const sel = document.getElementById('routeSelect');
+  routes.forEach(r => sel.innerHTML += `<option value="${r._id}">${r.source} → ${r.destination}</option>`);
+  if (routeParam) sel.value = routeParam;
+}
+
+// ── Map init ───────────────────────────────────────────────────────────────
+function initMap(lat=16.41, lng=74.46) {
+  if (map) return;
+  map = L.map('map').setView([lat, lng], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenStreetMap'
+  }).addTo(map);
+  // Route polyline layer
+  polyline = L.polyline([], { color:'#0052a5', weight:4, opacity:0.6, dashArray:'8 4' }).addTo(map);
+}
+
+const busIcon = L.divIcon({
+  html: `<div style="background:#0052a5;color:white;padding:7px 12px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,0.3);border:2px solid white">🚌</div>`,
+  iconAnchor:[24,20], className:''
+});
+
+function updateMap(lat, lng, busNum) {
+  if (!map) initMap(lat, lng);
+  map.setView([lat, lng], 14);
+  if (busMarker) busMarker.remove();
+  busMarker = L.marker([lat, lng], { icon: busIcon })
+    .addTo(map)
+    .bindPopup(`<b>${busNum}</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+  // Update polyline
+  pathPoints.push([lat, lng]);
+  if (pathPoints.length > 500) pathPoints.shift();
+  polyline.setLatLngs(pathPoints);
+  setTimeout(() => map.invalidateSize(), 200);
+}
+
+// ── Update info panel ──────────────────────────────────────────────────────
+function updateInfo(data) {
+  currentLat = data.latitude;
+  currentLng = data.longitude;
+  currentBus = data.busNumber;
+  lastUpdateTime = new Date(data.updatedAt || Date.now());
+
+  document.getElementById('busTitle').textContent = data.busNumber;
+  document.getElementById('infoBus').textContent  = data.busNumber;
+  document.getElementById('infoCoords').textContent = `${data.latitude?.toFixed(5)}, ${data.longitude?.toFixed(5)}`;
+  document.getElementById('infoAccuracy').textContent = data.accuracy ? `±${data.accuracy} m` : '—';
+
+  if (data.conductorId || data.conductorName) {
+    document.getElementById('infoConductor').textContent = data.conductorName || data.conductorId?.name || '—';
+  }
+
+  if (data.routeId) {
+    document.getElementById('routeFrom').textContent = data.routeId.source || '—';
+    document.getElementById('routeTo').textContent   = data.routeId.destination || '—';
+  }
+  // Show variant name below route if available
+  const variantName = data.variantId?.name;
+  let variantEl = document.getElementById('variantSubLabel');
+  if (!variantEl) {
+    variantEl = document.createElement('div');
+    variantEl.id = 'variantSubLabel';
+    variantEl.style.cssText = 'font-size:13px;color:var(--text-muted);margin-top:4px';
+    document.querySelector('.route-line')?.parentNode?.appendChild(variantEl);
+  }
+  variantEl.textContent = variantName ? '🔀 ' + variantName : '';
+
+  const speed = data.speed || 0;
+  document.getElementById('statSpeed').textContent = speed + ' km/h';
+
+  updateStatusBadge(data.status || 'active');
+  updateETA(data.latitude, data.longitude, speed);
+  updateMap(data.latitude, data.longitude, data.busNumber);
+  startLastUpdatedTimer();
+}
+
+// ── Status badge ───────────────────────────────────────────────────────────
+const STATUS_MAP = {
+  active:       { cls:'badge-active',       icon:'🟢', label:'Live' },
+  offline:      { cls:'badge-offline',      icon:'🟡', label:'Offline' },
+  disconnected: { cls:'badge-disconnected', icon:'🔴', label:'Disconnected' },
+  ended:        { cls:'badge-ended',        icon:'⚫', label:'Trip Ended' }
+};
+
+function updateStatusBadge(status) {
+  const s = STATUS_MAP[status] || STATUS_MAP.active;
+  const badge = document.getElementById('statusBadge');
+  badge.className = 'status-badge ' + s.cls;
+  badge.innerHTML = s.icon + ' ' + s.label;
+  document.getElementById('infoStatus').textContent = s.label;
+  const bar = document.getElementById('lastUpdatedBar');
+  bar.className = 'last-updated-bar' + (status !== 'active' ? ' stale' : '');
+}
+
+// ── Last-updated rolling timer ─────────────────────────────────────────────
+function startLastUpdatedTimer() {
+  clearInterval(lastUpdatedTimer);
+  lastUpdatedTimer = setInterval(() => {
+    if (!lastUpdateTime) return;
+    const secs = Math.round((Date.now() - lastUpdateTime) / 1000);
+    let txt;
+    if (secs < 15)       txt = 'Just now';
+    else if (secs < 60)  txt = secs + ' seconds ago';
+    else                 txt = Math.round(secs/60) + ' minutes ago';
+    document.getElementById('lastUpdatedText').textContent = txt;
+    if (secs > 90) document.getElementById('lastUpdatedBar').className = 'last-updated-bar stale';
+  }, 5000);
+}
+
+// ── ETA & distance (rough Haversine) ──────────────────────────────────────
+function haversineKm(lat1,lng1,lat2,lng2) {
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function updateETA(lat, lng, speedKmh) {
+  // Use Nippani as destination approximation
+  const destLat=16.41, destLng=74.46;
+  const dist = haversineKm(lat, lng, destLat, destLng);
+  document.getElementById('statDist').textContent = dist.toFixed(1) + ' km';
+  if (speedKmh > 5) {
+    const mins = Math.round((dist / speedKmh) * 60);
+    document.getElementById('statEta').textContent = mins < 2 ? 'Arrived' : '~' + mins + ' min';
+  } else {
+    document.getElementById('statEta').textContent = '—';
+  }
+}
+
+// ── Load GPS history (polyline) ────────────────────────────────────────────
+async function loadHistory(busNum) {
+  try {
+    const pts = await fetch(`/api/live/bus/${busNum}/history`).then(r=>r.json());
+    if (pts && pts.length > 1) {
+      pathPoints = pts.map(p => [p.latitude, p.longitude]);
+      if (polyline) polyline.setLatLngs(pathPoints);
+    }
+  } catch(e){}
+}
+
+// ── Show track view ────────────────────────────────────────────────────────
+function showTrackView(data) {
+  document.getElementById('emptyState').style.display   = 'none';
+  document.getElementById('busListView').style.display  = 'none';
+  document.getElementById('trackView').style.display    = 'block';
+  socket.emit('trackBus', data.busNumber);
+  currentBus = data.busNumber;
+  updateInfo(data);
+  loadHistory(data.busNumber);
+  loadStopProgress(data);
+}
+
+function showEmpty(title, msg) {
+  document.getElementById('trackView').style.display   = 'none';
+  document.getElementById('busListView').style.display = 'none';
+  document.getElementById('emptyState').style.display  = 'block';
+  document.getElementById('emptyTitle').textContent = title;
+  document.getElementById('emptyMsg').textContent   = msg;
+  if (!map) { initMap(); setTimeout(()=>map.invalidateSize(),300); }
+}
+
+// ── Search ─────────────────────────────────────────────────────────────────
+async function doSearch() {
+  const busNum  = document.getElementById('busInput').value.trim().toUpperCase();
+  const routeId = document.getElementById('routeSelect').value;
+  if (busNum) {
+    history.replaceState({},''  ,`/track?bus=${busNum}`);
+    await loadBus(busNum);
+  } else if (routeId) {
+    history.replaceState({},'', `/track?route=${routeId}`);
+    await loadRouteBuses(routeId);
+  } else {
+    showToast('Enter bus number or select route', 'error');
+  }
+}
+
+async function loadBus(busNum) {
+  try {
+    document.getElementById('busInput').value = busNum;
+    const data = await fetch(`/api/live/bus/${busNum}`).then(r=>r.json());
+    if (data.message) { showEmpty('Bus Not Active', `Bus ${busNum} is not currently active.`); initMap(); }
+    else showTrackView(data);
+  } catch(e) { showEmpty('Error', 'Could not load bus data.'); }
+}
+
+async function loadRouteBuses(routeId) {
+  try {
+    const buses = await fetch(`/api/live/route/${routeId}`).then(r=>r.json());
+    if (!buses.length) { showEmpty('No Active Buses', 'No buses active on this route right now.'); return; }
+    if (buses.length === 1) { showTrackView(buses[0]); return; }
+    document.getElementById('emptyState').style.display  = 'none';
+    document.getElementById('trackView').style.display   = 'none';
+    document.getElementById('busListView').style.display = 'block';
+    document.getElementById('busList').innerHTML = buses.map(b => `
+      <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
+        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px">${b.busNumber}</div>
+        <span class="status-badge badge-active">🟢 Live</span>
+        <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px">Track →</button>
+      </div>`).join('');
+  } catch(e) { showEmpty('Error','Could not load buses.'); }
+}
+
+// ── Socket.IO: real-time updates ───────────────────────────────────────────
+socket.on('locationUpdate', (data) => {
+  if (currentBus && data.busNumber === currentBus) {
+    updateInfo(data);
+  }
+});
+
+socket.on('globalLocationUpdate', (data) => {
+  if (currentBus && data.busNumber === currentBus) {
+    updateInfo(data);
+  }
+});
+
+socket.on('busStatus', (data) => {
+  if (currentBus && data.busNumber === currentBus) {
+    updateStatusBadge(data.status);
+    const labels = { offline:'⚠️ Bus went offline', disconnected:'❌ Bus disconnected', active:'✅ Bus reconnected' };
+    if (labels[data.status]) showToast(labels[data.status], data.status === 'active' ? 'success' : 'error');
+  }
+});
+
+socket.on('busInactive', (data) => {
+  if (currentBus && data.busNumber === currentBus) {
+    updateStatusBadge('ended');
+    showToast('Trip has ended for bus ' + currentBus, 'error');
+  }
+});
+
+function showToast(msg, type='') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+// ── Stop Progress ──────────────────────────────────────────────────────────
+let currentStops = [];
+
+async function loadStopProgress(busData) {
+  const variantId = busData.variantId?._id || busData.variantId;
+  if (!variantId) { document.getElementById('stopProgressPanel').style.display='none'; return; }
+
+  try {
+    const stops = await fetch('/api/variants/'+variantId+'/stops').then(r=>r.json());
+    if (!stops.length) { document.getElementById('stopProgressPanel').style.display='none'; return; }
+
+    currentStops = stops;
+    const variantName = busData.variantId?.name || '';
+    document.getElementById('variantNameLabel').textContent = variantName;
+    document.getElementById('stopProgressPanel').style.display = 'block';
+
+    renderStopProgress(busData.latitude, busData.longitude);
+  } catch(e) {
+    document.getElementById('stopProgressPanel').style.display='none';
+  }
+}
+
+function renderStopProgress(busLat, busLng) {
+  if (!currentStops.length) return;
+  // Find closest stop to current bus position
+  let closestIdx = 0, minDist = Infinity;
+  currentStops.forEach((s, i) => {
+    if (s.latitude && s.longitude) {
+      const d = haversineKm(busLat, busLng, s.latitude, s.longitude);
+      if (d < minDist) { minDist = d; closestIdx = i; }
+    }
+  });
+  // Without stop coordinates, we show all stops without a current highlight
+  // (can be enhanced later when stop coordinates are added)
+  const list = document.getElementById('stopProgressList');
+  list.innerHTML = currentStops.map((s, i) => {
+    let state = 'upcoming';
+    // Simple heuristic: if we don't have stop coords, show first stop as departed, rest upcoming
+    // When stop coords are available, closestIdx is used
+    let tag = '';
+    let stateClass = 'upcoming';
+    if (stateClass === 'current') tag = '<span class="stop-tag current-tag">● Bus here</span>';
+    return `<div class="stop-progress-item ${stateClass}">
+      <div class="stop-dot ${stateClass}">${s.order}</div>
+      <span class="stop-label ${stateClass}">${s.name}${tag}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+loadRoutes();
+if (busParam) { loadBus(busParam.toUpperCase()); }
+else if (routeParam) { loadRouteBuses(routeParam); }
+else if (fromParam && toParam) {
+  // Came from stop search
+  document.getElementById('busInput').value = '';
+  showEmpty('Stop Search', `Showing buses from ${fromParam} → ${toParam}`);
+  initMap();
+  // Show result inline
+  fetch('/api/variants/search/stops?from='+encodeURIComponent(fromParam)+'&to='+encodeURIComponent(toParam))
+    .then(r=>r.json()).then(data => {
+      if (data.buses?.length === 1) { showTrackView(data.buses[0]); }
+      else if (data.buses?.length > 1) {
+        document.getElementById('emptyState').style.display='none';
+        document.getElementById('busListView').style.display='block';
+        document.getElementById('busList').innerHTML = data.buses.map(b=>`
+          <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
+            <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">${b.busNumber}</div>
+            <button class="btn btn-primary btn-sm btn-block" style="margin-top:10px">Track →</button>
+          </div>`).join('');
+      }
+    }).catch(()=>{});
+}
+else { showEmpty('Search for a Bus', 'Enter a bus number or select a route above.'); initMap(); }
+</script>
+</body>
+</html>

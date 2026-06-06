@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login - KSRTC</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="login-page" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)">
+    <div class="login-card">
+      <div class="login-logo" style="background:linear-gradient(135deg,#4338ca,#6366f1)">⚙️</div>
+      <h1 class="login-title">Admin Login</h1>
+      <p class="login-subtitle">KSRTC Nippani Depot — Admin Portal</p>
+
+      <div id="alertBox" style="display:none"></div>
+
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-control" id="username" type="text" placeholder="admin" autocomplete="username"/>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-control" id="password" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+
+      <button class="btn btn-block btn-lg" id="loginBtn" onclick="login()"
+        style="background:linear-gradient(135deg,#4338ca,#6366f1);color:white">
+        Login to Admin
+      </button>
+
+      <div style="text-align:center;margin-top:20px">
+        <a href="/" style="font-size:14px;color:var(--primary)">← Back to Home</a>
+        &nbsp;|&nbsp;
+        <a href="/conductor" style="font-size:14px;color:var(--text-muted)">Conductor Login</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    if (localStorage.getItem('adminToken')) window.location.href = '/admin/dashboard';
+
+    document.getElementById('password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') login();
+    });
+
+    async function login() {
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('loginBtn');
+      if (!username || !password) { showAlert('Enter username and password.', 'error'); return; }
+      btn.innerHTML = '<span class="spinner"></span> Logging in...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/auth/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        localStorage.setItem('adminToken', data.token);
+        localStorage.setItem('adminUser', data.username);
+        window.location.href = '/admin/dashboard';
+      } catch(err) {
+        showAlert(err.message || 'Login failed.', 'error');
+        btn.innerHTML = 'Login to Admin';
+        btn.disabled = false;
+      }
+    }
+
+    function showAlert(msg, type) {
+      const box = document.getElementById('alertBox');
+      box.style.display = 'flex';
+      box.className = `alert alert-${type}`;
+      box.innerHTML = (type === 'error' ? '❌ ' : '✅ ') + msg;
+    }
+  </script>
+</body>
+</html>

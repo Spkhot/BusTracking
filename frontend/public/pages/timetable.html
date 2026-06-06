@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timetable - KSRTC Nippani</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">
+      <div class="navbar-logo">KSRTC</div>
+      <div>
+        <div class="navbar-title">Nippani Depot</div>
+        <div class="navbar-subtitle">Live Bus Tracker</div>
+      </div>
+    </a>
+    <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+    <ul class="navbar-nav" id="navMenu">
+      <li><a href="/">🏠 Home</a></li>
+      <li><a href="/track">📍 Track Bus</a></li>
+      <li><a href="/timetable" class="active">🕐 Timetable</a></li>
+      <li><a href="/conductor">🚌 Conductor</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <div style="background:linear-gradient(135deg,var(--primary-dark),var(--primary));padding:40px 24px;text-align:center;color:white">
+    <h1 style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;margin-bottom:8px">🕐 Bus Timetable</h1>
+    <p style="opacity:0.85">Nippani Depot — Departure Schedules</p>
+  </div>
+
+  <div class="container section">
+    <!-- Route Filter -->
+    <div id="routeFilters" class="route-filter" style="margin-bottom:28px">
+      <button class="route-filter-btn active" onclick="filterRoute('all', this)">All Routes</button>
+    </div>
+
+    <!-- Timetable Cards -->
+    <div id="timetableContent">
+      <div class="empty-state">
+        <div class="empty-state-icon">🕐</div>
+        <p>Loading timetable...</p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <strong>KSRTC Nippani Depot</strong> — Live Bus Tracking System
+  </footer>
+
+  <script>
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('navMenu').classList.toggle('open');
+    });
+
+    let allData = [];
+    let routesMap = {};
+
+    async function loadTimetable() {
+      try {
+        const [timetables, routes] = await Promise.all([
+          fetch('/api/timetables').then(r => r.json()),
+          fetch('/api/routes').then(r => r.json())
+        ]);
+        allData = timetables;
+        routes.forEach(r => { routesMap[r._id] = r; });
+
+        // Build filters
+        const filterBar = document.getElementById('routeFilters');
+        routes.forEach(r => {
+          filterBar.innerHTML += `<button class="route-filter-btn" onclick="filterRoute('${r._id}', this)">${r.source} → ${r.destination}</button>`;
+        });
+
+        renderTimetable(timetables, routes);
+      } catch(e) { console.error(e); }
+    }
+
+    function renderTimetable(data, routes) {
+      const container = document.getElementById('timetableContent');
+      if (!data.length) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🕐</div><h3>No Schedules Yet</h3><p>Timetable will appear here once the admin adds schedules.</p></div>`;
+        return;
+      }
+
+      // Group by route
+      const grouped = {};
+      data.forEach(t => {
+        const key = t.routeId?._id || t.routeId;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(t);
+      });
+
+      container.innerHTML = Object.entries(grouped).map(([routeId, entries]) => {
+        const route = entries[0].routeId || {};
+        const routeLabel = `${route.source || '?'} → ${route.destination || '?'}`;
+        const times = entries.sort((a,b) => a.departureTime.localeCompare(b.departureTime))
+          .map(t => `<span class="time-chip">🕐 ${t.departureTime}</span>`).join('');
+        return `
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header">
+              <div>
+                <div class="card-title">🚌 ${routeLabel}</div>
+                <div style="font-size:13px;color:var(--text-muted);margin-top:2px">${entries.length} departure${entries.length > 1 ? 's' : ''} daily</div>
+              </div>
+              <a href="/track?route=${routeId}" class="btn btn-primary btn-sm">Track Live →</a>
+            </div>
+            <div style="padding-top:4px">${times}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function filterRoute(id, btn) {
+      document.querySelectorAll('.route-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (id === 'all') {
+        renderTimetable(allData, []);
+      } else {
+        const filtered = allData.filter(t => (t.routeId?._id || t.routeId) === id);
+        renderTimetable(filtered, []);
+      }
+    }
+
+    loadTimetable();
+  </script>
+</body>
+</html>
