@@ -168,9 +168,12 @@
         <span id="stopVariantLabel" style="font-size:12px;opacity:0.8">Select a variant</span>
       </div>
       <div class="sec-body">
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
           <input class="form-control" id="sName" placeholder="Stop name (e.g. Kurli)"/>
           <button class="btn btn-primary" onclick="addStop()">+ Add Stop</button>
+          <div style="font-size:11px;color:var(--text-muted);padding:6px 8px;background:var(--surface2);border-radius:6px">
+            📍 = geocoded &nbsp; ⏳ = in progress &nbsp; ❓ = tap to retry
+          </div>
         </div>
         <div id="stopListItems" style="display:flex;flex-direction:column;gap:4px">
           <p style="color:var(--text-muted);font-size:13px">Select a variant first</p>
@@ -519,66 +522,74 @@ async function deleteBus(id,bn) {
 let selectedRouteId = null;
 let selectedVariantId = null;
 
+// ── Routes ─────────────────────────────────────────────────────────────────
 async function loadRoutes() {
   const list = await fetch('/api/routes').then(r=>r.json()).catch(()=>[]);
-  // Update timetable dropdown
+  // Refresh timetable dropdown
   const sel = document.getElementById('ttRoute');
   if (sel) {
     sel.innerHTML = '<option value="">Select Route...</option>';
     list.forEach(r => sel.innerHTML += `<option value="${r._id}">${r.source} → ${r.destination}</option>`);
   }
-  // Update route list in route panel
   const container = document.getElementById('routeListItems');
   if (!container) return;
   if (!list.length) {
-    container.innerHTML='<p style="color:var(--text-muted);font-size:13px">No routes yet. Add one above.</p>';
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No routes yet. Add one above.</p>';
     return;
   }
   container.innerHTML = list.map(r => `
-    <div class="route-item ${r._id===selectedRouteId?'selected':''}" onclick="selectRoute('${r._id}','${r.source}','${r.destination}')">
-      <span style="flex:1">${r.source} <span style="color:var(--text-muted)">→</span> ${r.destination}</span>
+    <div class="route-item ${r._id===selectedRouteId?'selected':''}"
+         onclick="selectRoute('${r._id}','${r.source}','${r.destination}')">
+      <div style="flex:1">
+        <div style="font-weight:600">${r.source}</div>
+        <div style="font-size:12px;color:var(--text-muted)">→ ${r.destination}</div>
+      </div>
       <button class="item-edit" onclick="event.stopPropagation();editRoute('${r._id}','${r.source}','${r.destination}')" title="Edit">✏️</button>
       <button class="item-del" onclick="event.stopPropagation();deleteRoute('${r._id}')" title="Delete">✕</button>
     </div>`).join('');
 }
 
 async function addRoute() {
-  const src=document.getElementById('rSrc').value.trim(), dst=document.getElementById('rDst').value.trim();
-  if (!src||!dst) { showToast('Enter source and destination','error'); return; }
-  const res=await fetch('/api/routes',{method:'POST',headers:H,body:JSON.stringify({source:src,destination:dst})});
-  const d=await res.json();
-  if (!res.ok) { showToast(d.message,'error'); return; }
-  document.getElementById('rSrc').value=''; document.getElementById('rDst').value='';
-  showToast('Route added!','success'); loadRoutes();
+  const src = document.getElementById('rSrc').value.trim();
+  const dst = document.getElementById('rDst').value.trim();
+  if (!src || !dst) { showToast('Enter source and destination', 'error'); return; }
+  const res = await fetch('/api/routes', { method:'POST', headers:H, body:JSON.stringify({ source:src, destination:dst }) });
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message, 'error'); return; }
+  document.getElementById('rSrc').value = '';
+  document.getElementById('rDst').value = '';
+  showToast('Route added!', 'success');
+  loadRoutes();
 }
 
 async function editRoute(id, src, dst) {
-  const newSrc = prompt('Source:', src); if (newSrc===null) return;
-  const newDst = prompt('Destination:', dst); if (newDst===null) return;
-  const res = await fetch(`/api/routes/${id}`,{method:'PUT',headers:H,body:JSON.stringify({source:newSrc.trim(),destination:newDst.trim()})});
-  if (!res.ok) { const d=await res.json(); showToast(d.message,'error'); return; }
-  showToast('Route updated!','success'); loadRoutes();
-  if (selectedRouteId===id) document.getElementById('variantRouteLabel').textContent = newSrc.trim()+' → '+newDst.trim();
+  const newSrc = prompt('Source city:', src);  if (newSrc === null) return;
+  const newDst = prompt('Destination city:', dst); if (newDst === null) return;
+  if (!newSrc.trim() || !newDst.trim()) { showToast('Source and destination required', 'error'); return; }
+  const res = await fetch(`/api/routes/${id}`, { method:'PUT', headers:H, body:JSON.stringify({ source:newSrc.trim(), destination:newDst.trim() }) });
+  if (!res.ok) { const d = await res.json(); showToast(d.message, 'error'); return; }
+  showToast('Route updated!', 'success');
+  if (selectedRouteId === id) document.getElementById('variantRouteLabel').textContent = newSrc.trim() + ' → ' + newDst.trim();
+  loadRoutes();
 }
 
 async function deleteRoute(id) {
-  if (!confirm('Delete this route and ALL its variants and stops?')) return;
-  const res=await fetch(`/api/routes/${id}`,{method:'DELETE',headers:H});
-  const d=await res.json();
-  if (!res.ok) { showToast(d.message,'error'); return; }
-  showToast('Route deleted','');
-  if (selectedRouteId===id) { selectedRouteId=null; clearVariantPanel(); clearStopPanel(); }
+  if (!confirm('Delete this route AND all its variants and stops?')) return;
+  const res = await fetch(`/api/routes/${id}`, { method:'DELETE', headers:H });
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message, 'error'); return; }
+  showToast('Route deleted', '');
+  if (selectedRouteId === id) { selectedRouteId = null; clearVariantPanel(); clearStopPanel(); }
   loadRoutes();
 }
 
 function selectRoute(id, src, dst) {
   selectedRouteId = id;
   selectedVariantId = null;
-  loadRoutes(); // re-render to highlight
-  // Activate variant panel
+  loadRoutes();
   const vp = document.getElementById('variantPanel');
-  vp.style.opacity='1'; vp.style.pointerEvents='all';
-  document.getElementById('variantRouteLabel').textContent = src+' → '+dst;
+  vp.style.opacity = '1'; vp.style.pointerEvents = 'all';
+  document.getElementById('variantRouteLabel').textContent = src + ' → ' + dst;
   loadVariants();
   clearStopPanel();
 }
@@ -586,113 +597,191 @@ function selectRoute(id, src, dst) {
 // ── Variants ───────────────────────────────────────────────────────────────
 async function loadVariants() {
   if (!selectedRouteId) return;
-  const list = await fetch('/api/variants?routeId='+selectedRouteId).then(r=>r.json()).catch(()=>[]);
+  const list = await fetch('/api/variants?routeId=' + selectedRouteId).then(r=>r.json()).catch(()=>[]);
   const container = document.getElementById('variantListItems');
   if (!list.length) {
-    container.innerHTML='<p style="color:var(--text-muted);font-size:13px">No variants yet. Add one above.</p>';
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No variants yet. Add one above.</p>';
     return;
   }
   container.innerHTML = list.map(v => `
-    <div class="variant-item ${v._id===selectedVariantId?'selected':''}" onclick="selectVariant('${v._id}','${v.name.replace(/'/g,"\'")}')">
-      <span style="flex:1">${v.name}</span>
-      <button class="item-edit" onclick="event.stopPropagation();editVariant('${v._id}','${v.name.replace(/'/g,"\'")}')">✏️</button>
-      <button class="item-del" onclick="event.stopPropagation();deleteVariant('${v._id}')">✕</button>
+    <div class="variant-item ${v._id===selectedVariantId?'selected':''}"
+         onclick="selectVariant('${v._id}','${v.name.replace(/\'/g,"\'")}')">
+      <span style="flex:1;font-size:13px">${v.name}</span>
+      <button class="item-edit" onclick="event.stopPropagation();editVariant('${v._id}','${v.name.replace(/\'/g,"\'")}')" title="Rename">✏️</button>
+      <button class="item-del" onclick="event.stopPropagation();deleteVariant('${v._id}')" title="Delete">✕</button>
     </div>`).join('');
 }
 
 async function addVariant() {
-  if (!selectedRouteId) { showToast('Select a route first','error'); return; }
+  if (!selectedRouteId) { showToast('Select a route first', 'error'); return; }
   const name = document.getElementById('vName').value.trim();
-  if (!name) { showToast('Enter variant name','error'); return; }
-  const res=await fetch('/api/variants',{method:'POST',headers:H,body:JSON.stringify({routeId:selectedRouteId,name})});
-  const d=await res.json();
-  if (!res.ok) { showToast(d.message,'error'); return; }
-  document.getElementById('vName').value='';
-  showToast('Variant added!','success'); loadVariants();
+  if (!name) { showToast('Enter variant name (e.g. Via Sadalaga Bypass)', 'error'); return; }
+  const res = await fetch('/api/variants', { method:'POST', headers:H, body:JSON.stringify({ routeId:selectedRouteId, name }) });
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message, 'error'); return; }
+  document.getElementById('vName').value = '';
+  showToast('Variant added!', 'success');
+  loadVariants();
 }
 
 async function editVariant(id, current) {
-  const name = prompt('Variant name:', current); if (!name) return;
-  const res=await fetch(`/api/variants/${id}`,{method:'PUT',headers:H,body:JSON.stringify({name:name.trim()})});
-  const d=await res.json();
-  if (!res.ok) { showToast(d.message,'error'); return; }
-  showToast('Updated!','success'); loadVariants();
-  if (selectedVariantId===id) document.getElementById('stopVariantLabel').textContent=name.trim();
+  const name = prompt('Rename variant:', current);
+  if (!name || !name.trim()) return;
+  const res = await fetch(`/api/variants/${id}`, { method:'PUT', headers:H, body:JSON.stringify({ name:name.trim() }) });
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message, 'error'); return; }
+  showToast('Updated!', 'success');
+  if (selectedVariantId === id) document.getElementById('stopVariantLabel').textContent = name.trim();
+  loadVariants();
 }
 
 async function deleteVariant(id) {
-  if (!confirm('Delete this variant and all its stops?')) return;
-  const res=await fetch(`/api/variants/${id}`,{method:'DELETE',headers:H});
-  const d=await res.json();
-  if (!res.ok) { showToast(d.message,'error'); return; }
-  showToast('Variant deleted','');
-  if (selectedVariantId===id) { selectedVariantId=null; clearStopPanel(); }
+  if (!confirm('Delete this variant and ALL its stops?')) return;
+  const res = await fetch(`/api/variants/${id}`, { method:'DELETE', headers:H });
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message, 'error'); return; }
+  showToast('Variant deleted', '');
+  if (selectedVariantId === id) { selectedVariantId = null; clearStopPanel(); }
   loadVariants();
 }
 
 function selectVariant(id, name) {
   selectedVariantId = id;
-  loadVariants(); // re-render to highlight
+  loadVariants();
   const sp = document.getElementById('stopPanel');
-  sp.style.opacity='1'; sp.style.pointerEvents='all';
+  sp.style.opacity = '1'; sp.style.pointerEvents = 'all';
   document.getElementById('stopVariantLabel').textContent = name;
   loadStops();
 }
 
 function clearVariantPanel() {
   const vp = document.getElementById('variantPanel');
-  vp.style.opacity='0.4'; vp.style.pointerEvents='none';
-  document.getElementById('variantRouteLabel').textContent='Select a route';
-  document.getElementById('variantListItems').innerHTML='<p style="color:var(--text-muted);font-size:13px">Select a route first</p>';
+  vp.style.opacity = '0.4'; vp.style.pointerEvents = 'none';
+  document.getElementById('variantRouteLabel').textContent = 'Select a route';
+  document.getElementById('variantListItems').innerHTML = '<p style="color:var(--text-muted);font-size:13px">Select a route first</p>';
 }
 
 // ── Stops ──────────────────────────────────────────────────────────────────
+let cachedStops = [];  // used for up/down reorder
+
 async function loadStops() {
   if (!selectedVariantId) return;
-  const list = await fetch('/api/variants/'+selectedVariantId+'/stops').then(r=>r.json()).catch(()=>[]);
+  const list = await fetch('/api/variants/' + selectedVariantId + '/stops').then(r=>r.json()).catch(()=>[]);
+  cachedStops = list;
+  renderStopList(list);
+}
+
+function renderStopList(list) {
   const container = document.getElementById('stopListItems');
   if (!list.length) {
-    container.innerHTML='<p style="color:var(--text-muted);font-size:13px">No stops yet. Add above.</p>';
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No stops yet. Add above.</p>';
     return;
   }
-  container.innerHTML = list.map(s => `
-    <div class="stop-item">
+  container.innerHTML = list.map((s, i) => {
+    let geoIcon = '⏳', geoTitle = 'Coordinates being looked up...';
+    if (s.latitude !== null && s.longitude !== null) {
+      geoIcon = '📍';
+      geoTitle = s.latitude.toFixed(4) + ', ' + s.longitude.toFixed(4) + ' (geocoded)';
+    }
+    const retryAttr = (s.latitude === null)
+      ? `onclick="retryGeocode('${s._id}','${s.name.replace(/'/g,"\\'")}','${selectedVariantId}')" style="cursor:pointer"`
+      : '';
+    return `<div class="stop-item" id="stop-row-${s._id}">
       <div class="stop-order">${s.order}</div>
-      <span class="stop-name">${s.name}</span>
-      <button class="item-edit" onclick="editStop('${s._id}','${s.name.replace(/'/g,"\'")}')" title="Edit">✏️</button>
-      <button class="item-del" onclick="deleteStop('${s._id}','${s.name.replace(/'/g,"\'")}')">✕</button>
-    </div>`).join('');
+      <div style="flex:1;min-width:0">
+        <span class="stop-name">${s.name}</span>
+        <span title="${geoTitle}" ${retryAttr} style="font-size:12px;margin-left:4px">${geoIcon}</span>
+      </div>
+      <div style="display:flex;gap:2px">
+        <button class="item-edit" onclick="moveStop('${s._id}','up')" title="Move up" ${i===0?'disabled style="opacity:0.3"':''}>▲</button>
+        <button class="item-edit" onclick="moveStop('${s._id}','down')" title="Move down" ${i===list.length-1?'disabled style="opacity:0.3"':''}>▼</button>
+        <button class="item-edit" onclick="editStop('${s._id}','${s.name.replace(/'/g,"\\'")}')" title="Edit">✏️</button>
+        <button class="item-del" onclick="deleteStop('${s._id}','${s.name.replace(/'/g,"\\'")}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function moveStop(stopId, direction) {
+  const idx = cachedStops.findIndex(s => s._id === stopId);
+  if (idx === -1) return;
+  const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= cachedStops.length) return;
+
+  // Swap orders
+  const a = cachedStops[idx];
+  const b = cachedStops[targetIdx];
+  const newStops = cachedStops.map(s => {
+    if (s._id === a._id) return { ...s, order: b.order };
+    if (s._id === b._id) return { ...s, order: a.order };
+    return s;
+  }).sort((x, y) => x.order - y.order);
+
+  cachedStops = newStops;
+  renderStopList(newStops);  // optimistic update
+
+  // Persist to server
+  try {
+    await fetch('/api/variants/' + selectedVariantId + '/stops/reorder/bulk', {
+      method: 'PUT', headers: H,
+      body: JSON.stringify({ stops: newStops.map(s => ({ _id: s._id, order: s.order })) })
+    });
+  } catch(e) {
+    showToast('Reorder failed — reloading', 'error');
+    loadStops();
+  }
 }
 
 async function addStop() {
-  if (!selectedVariantId) { showToast('Select a variant first','error'); return; }
+  if (!selectedVariantId) { showToast('Select a variant first', 'error'); return; }
   const name = document.getElementById('sName').value.trim();
-  if (!name) { showToast('Enter stop name','error'); return; }
-  const res=await fetch('/api/variants/'+selectedVariantId+'/stops',{method:'POST',headers:H,body:JSON.stringify({name})});
-  const d=await res.json();
-  if (!res.ok) { showToast(d.message,'error'); return; }
-  document.getElementById('sName').value='';
-  showToast(name+' added!','success'); loadStops();
+  if (!name) { showToast('Enter stop name', 'error'); return; }
+  const res = await fetch('/api/variants/' + selectedVariantId + '/stops', { method:'POST', headers:H, body:JSON.stringify({ name }) });
+  const d = await res.json();
+  if (!res.ok) { showToast(d.message, 'error'); return; }
+  document.getElementById('sName').value = '';
+  showToast(name + ' added!', 'success');
+  loadStops();
 }
 
 async function editStop(id, current) {
-  const name = prompt('Stop name:', current); if (!name) return;
-  const res=await fetch('/api/variants/'+selectedVariantId+'/stops/'+id,{method:'PUT',headers:H,body:JSON.stringify({name:name.trim()})});
-  if (!res.ok) { showToast('Failed to update','error'); return; }
-  showToast('Updated!','success'); loadStops();
+  const name = prompt('Stop name:', current);
+  if (!name || !name.trim()) return;
+  const res = await fetch('/api/variants/' + selectedVariantId + '/stops/' + id, {
+    method: 'PUT', headers: H, body: JSON.stringify({ name: name.trim() })
+  });
+  if (!res.ok) { showToast('Failed to update', 'error'); return; }
+  showToast('Updated!', 'success');
+  loadStops();
 }
 
 async function deleteStop(id, name) {
-  if (!confirm('Delete stop "'+name+'"?')) return;
-  await fetch('/api/variants/'+selectedVariantId+'/stops/'+id,{method:'DELETE',headers:H});
-  showToast('Stop deleted',''); loadStops();
+  if (!confirm('Delete stop "' + name + '"?')) return;
+  await fetch('/api/variants/' + selectedVariantId + '/stops/' + id, { method:'DELETE', headers:H });
+  showToast('Stop deleted', '');
+  loadStops();
+}
+
+async function retryGeocode(stopId, name, variantId) {
+  if (!variantId) return;
+  showToast('🌐 Geocoding "' + name + '"...', '');
+  try {
+    const res = await fetch('/api/variants/' + variantId + '/stops/' + stopId + '/geocode', { method:'POST', headers:H });
+    const d = await res.json();
+    if (d.success) {
+      showToast('📍 Geocoded: ' + name, 'success');
+      loadStops();
+    } else {
+      showToast('❌ ' + d.message, 'error');
+    }
+  } catch(e) { showToast('Geocode request failed', 'error'); }
 }
 
 function clearStopPanel() {
   const sp = document.getElementById('stopPanel');
-  sp.style.opacity='0.4'; sp.style.pointerEvents='none';
-  document.getElementById('stopVariantLabel').textContent='Select a variant';
-  document.getElementById('stopListItems').innerHTML='<p style="color:var(--text-muted);font-size:13px">Select a variant first</p>';
+  sp.style.opacity = '0.4'; sp.style.pointerEvents = 'none';
+  document.getElementById('stopVariantLabel').textContent = 'Select a variant';
+  document.getElementById('stopListItems').innerHTML = '<p style="color:var(--text-muted);font-size:13px">Select a variant first</p>';
 }
 
 // ── Timetable ──────────────────────────────────────────────────────────────

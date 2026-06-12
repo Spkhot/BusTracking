@@ -43,22 +43,4 @@ router.post('/admin/login', async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
-
-// Seed route — only works if no admin exists yet (safe to leave in)
-router.post('/seed', async (req, res) => {
-  try {
-    const adminExists = await Admin.findOne({ username: 'admin' });
-    if (!adminExists) await Admin.create({ username: 'admin', password: 'ksrtc@2024' });
-
-    const c1 = await Conductor.findOne({ username: 'conductor1' });
-    if (!c1) {
-      await Conductor.create({ username: 'conductor1', password: 'pass@123', name: 'Raju Patil', mobile: '9876543210', employeeId: 'EMP001' });
-      await Conductor.create({ username: 'conductor2', password: 'pass@123', name: 'Suresh Kumar', mobile: '9876543211', employeeId: 'EMP002' });
-    }
-    res.json({ message: '✅ Seeded: admin/ksrtc@2024 | conductor1,conductor2 / pass@123' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 module.exports = router;

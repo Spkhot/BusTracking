@@ -10,6 +10,7 @@ const liveLocationSchema = new mongoose.Schema({
   latitude:     { type: Number, required: true },
   longitude:    { type: Number, required: true },
   speed:        { type: Number, default: 0 },
+  currentStopIdx: { type: Number, default: 0 }, // 0-based index of current/nearest stop
   heading:      { type: Number, default: 0 },
   accuracy:     { type: Number, default: 0 },
   status:       { type: String, default: 'active', enum: ['active', 'offline', 'disconnected'] },

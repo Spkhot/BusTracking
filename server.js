@@ -31,9 +31,12 @@ mongoose.connect(process.env.MONGODB_URI)
   .catch(err => { console.error('❌ MongoDB Error:', err); process.exit(1); });
 
 // ── Models (load once) ────────────────────────────────────────────────────────
-const LiveLocation = require('./backend/models/LiveLocation');
-const TripHistory  = require('./backend/models/TripHistory');
-const TripLocation = require('./backend/models/TripLocation');
+const LiveLocation    = require('./backend/models/LiveLocation');
+const TripHistory     = require('./backend/models/TripHistory');
+const TripLocation    = require('./backend/models/TripLocation');
+const { detectCurrentStop, invalidateStopCache } = require('./backend/services/stopDetector');
+// Ensure StopMaster model is registered (used by geocoder)
+require('./backend/models/StopMaster');
 
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/api/auth',       require('./backend/routes/auth'));
@@ -59,6 +62,7 @@ app.get('/timetable',           (_, res) => res.sendFile(pub('pages/timetable.ht
 // Used to detect duplicate logins and send targeted messages
 const conductorSockets = new Map(); // conductorId → socket.id
 const socketTrips      = new Map(); // socket.id → { busNumber, tripId, conductorId }
+const busStopIdx       = new Map(); // busNumber → currentStopIdx (monotonically increases)
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -108,6 +112,7 @@ io.on('connection', (socket) => {
           conductorId,
           conductorName,
           latitude: 0, longitude: 0,
+          currentStopIdx: 0,
           status: 'active',
           tripId: trip._id,
           startedAt: new Date(),
@@ -134,13 +139,53 @@ io.on('connection', (socket) => {
     const { busNumber, routeId, variantId, latitude, longitude, speed = 0, heading = 0, accuracy = 0, tripId } = data;
     if (!busNumber || !latitude || !longitude) return;
 
+    const busKey = busNumber.toUpperCase();
+
     try {
       const now = new Date();
-      // Update LiveLocation
+
+      // ── Nearest stop detection ────────────────────────────────────────────
+      let currentStopIdx = busStopIdx.get(busKey) || 0;
+      let nearestStopName = null;
+      let nearestDistanceM = null;
+      let reachedNewStop = false;
+
+      if (variantId) {
+        try {
+          const result = await detectCurrentStop(variantId, latitude, longitude, currentStopIdx);
+          nearestStopName  = result.nearestStopName;
+          nearestDistanceM = result.nearestDistanceM;
+          reachedNewStop   = result.reachedNewStop;
+
+          // Stop index can only increase (monotonic forward progression)
+          if (result.currentStopIdx > currentStopIdx) {
+            currentStopIdx = result.currentStopIdx;
+            busStopIdx.set(busKey, currentStopIdx);
+
+            // Emit arrival notification when bus reaches a new stop
+            if (reachedNewStop && nearestStopName) {
+              const nextStop = result.stops[currentStopIdx + 1]?.name || null;
+              io.to(`bus-${busKey}`).emit('reachedStop', {
+                busNumber: busKey,
+                stopName:  nearestStopName,
+                stopIdx:   currentStopIdx,
+                nextStop,
+                distanceM: nearestDistanceM
+              });
+              console.log(`🚏 ${busKey} reached: ${nearestStopName} → next: ${nextStop || 'destination'}`);
+            }
+          }
+        } catch (stopErr) {
+          console.error('Stop detection error:', stopErr.message);
+        }
+      }
+
+      // ── Update LiveLocation ───────────────────────────────────────────────
       await LiveLocation.findOneAndUpdate(
-        { busNumber: busNumber.toUpperCase() },
+        { busNumber: busKey },
         {
           latitude, longitude, speed, heading, accuracy,
+          currentStopIdx,
           ...(variantId && { variantId }),
           status: 'active',
           updatedAt: now
@@ -148,24 +193,23 @@ io.on('connection', (socket) => {
         { new: true }
       );
 
-      // Store GPS history point
+      // ── GPS history ───────────────────────────────────────────────────────
       if (tripId) {
         await TripLocation.create({
-          tripId, busNumber: busNumber.toUpperCase(),
+          tripId, busNumber: busKey,
           latitude, longitude, speed, accuracy,
           timestamp: now
         });
-        // Update trip distance (rough calculation)
-        await TripHistory.findByIdAndUpdate(tripId, {
-          $inc: { totalUpdates: 1 }
-        });
+        await TripHistory.findByIdAndUpdate(tripId, { $inc: { totalUpdates: 1 } });
       }
 
-      // Broadcast to passengers watching this bus
-      const payload = { busNumber: busNumber.toUpperCase(), latitude, longitude, speed, heading, accuracy, updatedAt: now, status: 'active' };
-      io.to(`bus-${busNumber.toUpperCase()}`).emit('locationUpdate', payload);
-
-      // Also broadcast globally for homepage active-bus list
+      // ── Broadcast to passengers ───────────────────────────────────────────
+      const payload = {
+        busNumber: busKey, latitude, longitude, speed, heading, accuracy,
+        currentStopIdx, nearestStopName, nearestDistanceM,
+        updatedAt: now, status: 'active'
+      };
+      io.to(`bus-${busKey}`).emit('locationUpdate', payload);
       io.emit('globalLocationUpdate', payload);
 
     } catch (err) {
@@ -246,6 +290,7 @@ async function endTrip(busNumber, tripId, reason, socket) {
         });
       }
     }
+    busStopIdx.delete(busNumber?.toUpperCase());
     await LiveLocation.deleteOne({ busNumber: busNumber?.toUpperCase() });
     io.emit('busInactive', { busNumber: busNumber?.toUpperCase(), status: 'ended' });
     if (socket) socket.emit('tripEnded', { busNumber });

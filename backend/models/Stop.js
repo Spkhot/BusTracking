@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
-// Each stop belongs to a RouteVariant and has an order position
+// Each stop belongs to a RouteVariant and has an order position.
+// Coordinates are NOT entered by admin — they come from StopMaster via geocoding.
 const stopSchema = new mongoose.Schema({
   variantId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -15,12 +16,20 @@ const stopSchema = new mongoose.Schema({
   },
   order: {
     type: Number,
-    required: true
-    // 1-based integer: 1=first stop, 2=second, etc.
+    required: true  // 1-based
+  },
+  // Coordinates — copied from StopMaster when stop is created/updated.
+  // null until geocoding completes.
+  latitude:  { type: Number, default: null },
+  longitude: { type: Number, default: null },
+  // Link to StopMaster for reference
+  stopMasterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'StopMaster',
+    default: null
   }
 }, { timestamps: true });
 
-// Compound index: fast lookup of ordered stops for a variant
 stopSchema.index({ variantId: 1, order: 1 });
 
 module.exports = mongoose.model('Stop', stopSchema);

@@ -163,6 +163,14 @@
       window.location.href = `/track?route=${encodeURIComponent(r)}`;
     }
 
+    // Enter key for stop search
+    document.addEventListener('DOMContentLoaded', () => {
+      ['fromStop','toStop'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('keydown', e => { if (e.key === 'Enter') searchByStop(); });
+      });
+    });
+
     async function searchByStop() {
       const from = document.getElementById('fromStop').value.trim();
       const to   = document.getElementById('toStop').value.trim();

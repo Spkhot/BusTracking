@@ -7,29 +7,123 @@
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    #map { height: 380px; border-radius: var(--radius); overflow:hidden; }
-    .track-layout { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
-    @media(max-width:860px){ .track-layout { grid-template-columns:1fr; } }
-    .search-top { background:white; border-bottom:1px solid var(--border); padding:12px 20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .route-line { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:600; }
-    .route-dot  { width:10px; height:10px; border-radius:50%; background:var(--primary); }
-    .route-line-bar { flex:1; height:2px; background:var(--primary); min-width:30px; }
-    /* Stop progress */
-    .stop-progress-item { display:flex; align-items:center; gap:12px; padding:8px 0; position:relative; }
-    .stop-progress-item:not(:last-child)::after { content:''; position:absolute; left:10px; top:28px; width:2px; height:100%; background:#e2e8f0; z-index:0; }
-    .stop-progress-item.completed::after { background:#16a34a; }
-    .stop-dot { width:22px; height:22px; border-radius:50%; border:2px solid #e2e8f0; background:white; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; z-index:1; position:relative; transition:all 0.3s; }
-    .stop-dot.completed { background:#16a34a; border-color:#16a34a; color:white; }
-    .stop-dot.current   { background:var(--primary); border-color:var(--primary); color:white; box-shadow:0 0 0 4px rgba(0,82,165,0.2); animation:stopPulse 1.5s infinite; }
-    .stop-dot.upcoming  { background:#f1f5f9; border-color:#cbd5e1; color:var(--text-muted); }
-    @keyframes stopPulse { 0%,100%{box-shadow:0 0 0 0 rgba(0,82,165,0.4)} 50%{box-shadow:0 0 0 6px rgba(0,82,165,0)} }
-    .stop-label { font-size:14px; font-weight:500; }
-    .stop-label.completed { color:var(--text-muted); text-decoration:line-through; }
-    .stop-label.current   { color:var(--primary); font-weight:700; }
-    .stop-label.upcoming  { color:var(--text); }
-    .stop-tag { font-size:11px; margin-left:4px; padding:2px 6px; border-radius:100px; }
-    .stop-tag.current-tag   { background:#dbeafe; color:var(--primary); }
-    .stop-tag.completed-tag { background:#f1f5f9; color:var(--text-muted); }
+    #map { height: 360px; border-radius: var(--radius); overflow: hidden; background: #e8edf2; }
+    .track-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+    @media(max-width:860px) { .track-layout { grid-template-columns: 1fr; } }
+    .search-top {
+      background: white; border-bottom: 1px solid var(--border);
+      padding: 12px 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .via-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #ede9fe; color: #5b21b6; font-size: 12px; font-weight: 600;
+      padding: 3px 10px; border-radius: 100px; margin-top: 4px;
+    }
+
+    /* ── Map container ── */
+    .map-wrapper { position: relative; }
+
+    /* Center-on-bus button (hidden when auto-follow is active) */
+    #centerBtn {
+      display: none;
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: white;
+      border: 2px solid var(--primary);
+      color: var(--primary);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      transition: all 0.2s;
+    }
+    #centerBtn:hover { background: var(--primary); color: white; }
+
+    /* ── Updated bar ── */
+    .updated-bar {
+      display: flex; align-items: center; gap: 8px; font-size: 13px;
+      color: var(--text-muted); background: #f8fafc; border-radius: 8px;
+      padding: 8px 12px; margin-top: 10px;
+    }
+    .updated-bar.stale { background: #fef9c3; color: #854d0e; }
+
+    /* ── Stats row ── */
+    .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+    .stat-chip { background: white; border-radius: 10px; padding: 10px; text-align: center; box-shadow: var(--shadow-sm); }
+    .stat-chip-val   { font-family:'Rajdhani',sans-serif; font-size:20px; font-weight:700; }
+    .stat-chip-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; }
+
+    /* ── Stop summary (current + next) ── */
+    .stop-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .stop-summary-box { background: var(--surface2); border-radius: 10px; padding: 10px 14px; border: 1px solid var(--border); }
+    .stop-summary-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stop-summary-val   { font-size: 15px; font-weight: 700; margin-top: 2px; }
+    .stop-summary-val.live { color: var(--primary); }
+
+    /* ── Stop list ── */
+    .stop-list { padding: 4px 0; }
+    .stop-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; position: relative; }
+    .stop-row:not(:last-child)::after {
+      content: ''; position: absolute; left: 11px; top: 30px;
+      width: 2px; height: calc(100% - 8px); background: #e2e8f0; z-index: 0;
+    }
+    .stop-row.done::after    { background: #16a34a; }
+    .stop-row.current::after { background: linear-gradient(#16a34a, #e2e8f0); }
+
+    .stop-circle {
+      width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700;
+      flex-shrink: 0; position: relative; z-index: 1; transition: all 0.4s;
+    }
+    .stop-circle.done    { background: #16a34a; color: white; }
+    .stop-circle.current { background: var(--primary); color: white; animation: stopPulse 2s infinite; }
+    .stop-circle.upcoming { background: #f1f5f9; color: #94a3b8; border: 2px solid #e2e8f0; }
+
+    @keyframes stopPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(0,82,165,0.35); }
+      50%      { box-shadow: 0 0 0 8px rgba(0,82,165,0); }
+    }
+
+    .stop-text          { font-size: 14px; line-height: 1.3; flex: 1; }
+    .stop-text.done     { color: var(--text-muted); }
+    .stop-text.current  { color: var(--primary); font-weight: 700; font-size: 15px; }
+    .stop-text.upcoming { color: var(--text); }
+
+    .stop-dist {
+      font-size: 11px; color: var(--text-light); font-family: monospace; white-space: nowrap;
+    }
+    .stop-tag-here {
+      display: inline-block; font-size: 10px; background: #dbeafe;
+      color: var(--primary); padding: 1px 6px; border-radius: 100px; margin-left: 4px; font-weight: 600;
+    }
+
+    /* ── Geocode pending notice ── */
+    .geocode-notice {
+      background: #fef9c3; border: 1px solid #fde68a; color: #854d0e;
+      border-radius: 8px; padding: 8px 12px; font-size: 12px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* ── Arrival toast ── */
+    .arrival-toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+      background: var(--primary); color: white;
+      padding: 12px 24px; border-radius: 100px;
+      font-size: 14px; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,82,165,0.35);
+      z-index: 3000;
+      animation: arrivalPop 0.4s ease;
+      white-space: nowrap;
+    }
+    @keyframes arrivalPop {
+      from { transform: translateX(-50%) scale(0.8); opacity: 0; }
+      to   { transform: translateX(-50%) scale(1);   opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -50,7 +144,7 @@
 <div class="search-top">
   <input type="text" id="busInput" class="form-control" style="max-width:200px" placeholder="Bus No. e.g. KA22F1234"/>
   <select id="routeSelect" class="form-control form-select" style="max-width:260px">
-    <option value="">Or select route...</option>
+    <option value="">Or select a route...</option>
   </select>
   <button class="btn btn-primary" onclick="doSearch()">🔍 Track</button>
   <a href="/" class="btn btn-outline btn-sm">← Home</a>
@@ -58,7 +152,7 @@
 
 <div class="container" style="padding-top:24px;padding-bottom:48px">
 
-  <!-- EMPTY / ERROR -->
+  <!-- EMPTY -->
   <div id="emptyState">
     <div class="empty-state" style="padding:60px 20px">
       <div class="empty-state-icon">🚌</div>
@@ -69,80 +163,87 @@
 
   <!-- MULTIPLE BUSES -->
   <div id="busListView" style="display:none">
-    <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;margin-bottom:16px">Buses on Route</h2>
+    <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;margin-bottom:16px" id="busListTitle">Buses on Route</h2>
     <div id="busList" class="grid-3"></div>
   </div>
 
-  <!-- SINGLE BUS TRACKING -->
+  <!-- SINGLE BUS -->
   <div id="trackView" style="display:none">
-    <!-- Header -->
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px">
-      <div>
-        <h1 id="busTitle" style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;line-height:1">—</h1>
-        <div class="route-line" style="margin-top:6px">
-          <span class="route-dot"></span>
-          <span id="routeFrom">—</span>
-          <div class="route-line-bar"></div>
-          <span class="route-dot"></span>
-          <span id="routeTo">—</span>
-        </div>
-      </div>
-      <div style="margin-left:auto">
+
+    <!-- Bus header -->
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <h1 id="busTitle" style="font-family:'Rajdhani',sans-serif;font-size:34px;font-weight:700;line-height:1">—</h1>
         <span id="statusBadge" class="status-badge badge-active"><span class="live-dot"></span> Live</span>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <span id="routeFrom" style="font-size:16px;font-weight:600">—</span>
+        <span style="color:var(--text-muted)">→</span>
+        <span id="routeTo"   style="font-size:16px;font-weight:600">—</span>
+      </div>
+      <div id="viaTag" style="display:none" class="via-tag">🔀 <span id="viaLabel"></span></div>
     </div>
 
     <div class="track-layout">
-      <!-- MAP -->
+      <!-- MAP + STATS -->
       <div>
-        <div id="map"></div>
-        <div class="last-updated-bar" id="lastUpdatedBar">
-          🕐 Last updated: <span id="lastUpdatedText">—</span>
+        <div class="map-wrapper">
+          <div id="map"></div>
+          <button id="centerBtn" onclick="enableAutoFollow()">📍 Center on Bus</button>
         </div>
-        <div class="track-stats-row">
-          <div class="track-stat">
-            <div class="track-stat-value" id="statSpeed">— km/h</div>
-            <div class="track-stat-label">Speed</div>
-          </div>
-          <div class="track-stat">
-            <div class="track-stat-value" id="statEta">—</div>
-            <div class="track-stat-label">ETA</div>
-          </div>
-          <div class="track-stat">
-            <div class="track-stat-value" id="statDist">—</div>
-            <div class="track-stat-label">Distance</div>
-          </div>
+        <div class="updated-bar" id="updatedBar">🕐 Last updated: <span id="updatedText">—</span></div>
+        <div class="stats-row">
+          <div class="stat-chip"><div class="stat-chip-val" id="statSpeed">—</div><div class="stat-chip-label">km/h</div></div>
+          <div class="stat-chip"><div class="stat-chip-val" id="statEta">—</div><div class="stat-chip-label">ETA</div></div>
+          <div class="stat-chip"><div class="stat-chip-val" id="statDist">—</div><div class="stat-chip-label">Distance</div></div>
         </div>
       </div>
 
-      <!-- INFO PANEL -->
+      <!-- INFO + STOPS -->
       <div>
-        <div class="card" style="margin-bottom:16px">
-          <div class="info-row"><span class="info-label">Bus</span><span class="info-value" id="infoBus">—</span></div>
-          <div class="info-row"><span class="info-label">Conductor</span><span class="info-value" id="infoConductor">—</span></div>
-          <div class="info-row"><span class="info-label">Status</span><span class="info-value" id="infoStatus">—</span></div>
-          <div class="info-row"><span class="info-label">Coordinates</span><span class="info-value" id="infoCoords" style="font-family:monospace;font-size:12px">—</span></div>
-          <div class="info-row"><span class="info-label">Accuracy</span><span class="info-value" id="infoAccuracy">—</span></div>
+        <!-- Info card -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="info-row"><span class="info-label">Bus No.</span>    <span class="info-value" id="infoBus">—</span></div>
+          <div class="info-row"><span class="info-label">Conductor</span>  <span class="info-value" id="infoConductor">—</span></div>
+          <div class="info-row"><span class="info-label">Status</span>     <span class="info-value" id="infoStatus">—</span></div>
+          <div class="info-row"><span class="info-label">Speed</span>      <span class="info-value" id="infoSpeed">—</span></div>
+          <div class="info-row"><span class="info-label">Accuracy</span>   <span class="info-value" id="infoAccuracy">—</span></div>
+          <div class="info-row"><span class="info-label">Last Update</span><span class="info-value" id="infoLastUpdate">—</span></div>
         </div>
-        <a href="/timetable" class="btn btn-outline btn-block">🕐 View Timetable</a>
+
+        <!-- Current / Next stop summary -->
+        <div class="stop-summary" id="stopSummary" style="display:none">
+          <div class="stop-summary-box">
+            <div class="stop-summary-label">📍 Current Stop</div>
+            <div class="stop-summary-val live" id="summaryCurrentStop">—</div>
+          </div>
+          <div class="stop-summary-box">
+            <div class="stop-summary-label">⏩ Next Stop</div>
+            <div class="stop-summary-val" id="summaryNextStop">—</div>
+          </div>
+        </div>
+
+        <!-- Stop progress -->
+        <div id="stopProgressPanel" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">🚏 Stops</div>
+                <div id="stopVariantName" style="font-size:12px;color:var(--text-muted);margin-top:2px"></div>
+              </div>
+              <div id="stopMeta" style="font-size:12px;color:var(--text-muted)"></div>
+            </div>
+            <div id="geocodeNotice" class="geocode-notice" style="display:none">
+              ⏳ Stop coordinates are being looked up. Progress updates automatically.
+            </div>
+            <div class="stop-list" id="stopList"></div>
+          </div>
+        </div>
+
+        <a href="/timetable" class="btn btn-outline btn-block" style="margin-top:14px">🕐 View Timetable</a>
       </div>
     </div>
-
-    <!-- STOP PROGRESS (shown only when variant data available) -->
-    <div id="stopProgressPanel" style="display:none;margin-top:20px">
-      <div class="card">
-        <div class="card-header" style="padding-bottom:12px">
-          <div>
-            <div class="card-title">🚏 Route Stops</div>
-            <div id="variantNameLabel" style="font-size:13px;color:var(--text-muted);margin-top:2px"></div>
-          </div>
-        </div>
-        <div id="stopProgressList" style="padding-top:4px"></div>
-      </div>
-    </div>
-
   </div>
-</div>
 
 </div>
 
@@ -153,176 +254,321 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
 const socket = io();
-let map, busMarker, polyline;
-let currentBus = null;
+
+// ── State ──────────────────────────────────────────────────────────────────
+let map, busMarker;
+let autoFollow   = true;   // follows bus by default; disabled on user map interaction
+let currentBus   = null;
+let currentStops = [];
+let currentStopIdx = 0;
 let lastUpdateTime = null;
-let pathPoints = [];
-let lastUpdatedTimer;
-let currentLat, currentLng;
+let updatedTimer;
+let animFrame;
+let targetLat, targetLng;
 
-document.getElementById('hamburger').addEventListener('click', () => {
-  document.getElementById('navMenu').classList.toggle('open');
-});
-
-// ── Parse URL ──────────────────────────────────────────────────────────────
-const params = new URLSearchParams(window.location.search);
+const params     = new URLSearchParams(window.location.search);
 const busParam   = params.get('bus');
 const routeParam = params.get('route');
 const fromParam  = params.get('from');
 const toParam    = params.get('to');
 
-// ── Load routes dropdown ───────────────────────────────────────────────────
+document.getElementById('hamburger').addEventListener('click', () =>
+  document.getElementById('navMenu').classList.toggle('open')
+);
+
+// ── Routes dropdown ────────────────────────────────────────────────────────
 async function loadRoutes() {
-  const routes = await fetch('/api/routes').then(r=>r.json()).catch(()=>[]);
+  const routes = await fetch('/api/routes').then(r => r.json()).catch(() => []);
   const sel = document.getElementById('routeSelect');
   routes.forEach(r => sel.innerHTML += `<option value="${r._id}">${r.source} → ${r.destination}</option>`);
   if (routeParam) sel.value = routeParam;
 }
 
-// ── Map init ───────────────────────────────────────────────────────────────
-function initMap(lat=16.41, lng=74.46) {
+// ── Map: clean bus-icon-only, smart auto-follow ────────────────────────────
+function initMap(lat = 16.41, lng = 74.46) {
   if (map) return;
-  map = L.map('map').setView([lat, lng], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'© OpenStreetMap'
-  }).addTo(map);
-  // Route polyline layer
-  polyline = L.polyline([], { color:'#0052a5', weight:4, opacity:0.6, dashArray:'8 4' }).addTo(map);
+  map = L.map('map', { zoomControl: true, attributionControl: false }).setView([lat, lng], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+
+  // Detect any user interaction with the map → disable auto-follow
+  map.on('movestart', (e) => {
+    // Ignore programmatic moves (those come through our own code)
+    if (e._autoMove) return;
+    disableAutoFollow();
+  });
+  map.on('zoomstart', (e) => {
+    if (e._autoMove) return;
+    disableAutoFollow();
+  });
 }
 
-const busIcon = L.divIcon({
-  html: `<div style="background:#0052a5;color:white;padding:7px 12px;border-radius:10px;font-weight:700;font-size:13px;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,0.3);border:2px solid white">🚌</div>`,
-  iconAnchor:[24,20], className:''
+function disableAutoFollow() {
+  if (!autoFollow) return;
+  autoFollow = false;
+  document.getElementById('centerBtn').style.display = 'block';
+}
+
+function enableAutoFollow() {
+  autoFollow = true;
+  document.getElementById('centerBtn').style.display = 'none';
+  // Pan to current bus position immediately
+  if (busMarker) {
+    map.setView(busMarker.getLatLng(), map.getZoom(), { animate: true });
+  }
+}
+
+const BUS_ICON = L.divIcon({
+  html: `<div style="
+    background:#0052a5;color:white;width:44px;height:44px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:22px;
+    box-shadow:0 3px 14px rgba(0,82,165,0.45);border:3px solid white;">🚌</div>`,
+  iconSize: [44,44], iconAnchor: [22,22], className: ''
 });
 
-function updateMap(lat, lng, busNum) {
-  if (!map) initMap(lat, lng);
-  map.setView([lat, lng], 14);
-  if (busMarker) busMarker.remove();
-  busMarker = L.marker([lat, lng], { icon: busIcon })
-    .addTo(map)
-    .bindPopup(`<b>${busNum}</b><br>${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-  // Update polyline
-  pathPoints.push([lat, lng]);
-  if (pathPoints.length > 500) pathPoints.shift();
-  polyline.setLatLngs(pathPoints);
-  setTimeout(() => map.invalidateSize(), 200);
+// Smooth marker lerp animation (no jump on GPS update)
+function animateMarker() {
+  if (!busMarker || targetLat === undefined) return;
+  const cur = busMarker.getLatLng();
+  const newLat = cur.lat + (targetLat - cur.lat) * 0.15;
+  const newLng = cur.lng + (targetLng - cur.lng) * 0.15;
+  busMarker.setLatLng([newLat, newLng]);
+  if (Math.abs(newLat - targetLat) > 0.000002 || Math.abs(newLng - targetLng) > 0.000002)
+    animFrame = requestAnimationFrame(animateMarker);
 }
 
-// ── Update info panel ──────────────────────────────────────────────────────
-function updateInfo(data) {
-  currentLat = data.latitude;
-  currentLng = data.longitude;
-  currentBus = data.busNumber;
-  lastUpdateTime = new Date(data.updatedAt || Date.now());
+function updateMap(lat, lng) {
+  if (!map) initMap(lat, lng);
 
-  document.getElementById('busTitle').textContent = data.busNumber;
-  document.getElementById('infoBus').textContent  = data.busNumber;
-  document.getElementById('infoCoords').textContent = `${data.latitude?.toFixed(5)}, ${data.longitude?.toFixed(5)}`;
-  document.getElementById('infoAccuracy').textContent = data.accuracy ? `±${data.accuracy} m` : '—';
-
-  if (data.conductorId || data.conductorName) {
-    document.getElementById('infoConductor').textContent = data.conductorName || data.conductorId?.name || '—';
+  if (!busMarker) {
+    busMarker = L.marker([lat, lng], { icon: BUS_ICON }).addTo(map);
+    map.setView([lat, lng], 14);
+    return;
   }
 
-  if (data.routeId) {
-    document.getElementById('routeFrom').textContent = data.routeId.source || '—';
-    document.getElementById('routeTo').textContent   = data.routeId.destination || '—';
-  }
-  // Show variant name below route if available
-  const variantName = data.variantId?.name;
-  let variantEl = document.getElementById('variantSubLabel');
-  if (!variantEl) {
-    variantEl = document.createElement('div');
-    variantEl.id = 'variantSubLabel';
-    variantEl.style.cssText = 'font-size:13px;color:var(--text-muted);margin-top:4px';
-    document.querySelector('.route-line')?.parentNode?.appendChild(variantEl);
-  }
-  variantEl.textContent = variantName ? '🔀 ' + variantName : '';
+  // Smooth position update
+  cancelAnimationFrame(animFrame);
+  targetLat = lat; targetLng = lng;
+  animateMarker();
 
-  const speed = data.speed || 0;
-  document.getElementById('statSpeed').textContent = speed + ' km/h';
+  // Auto-follow: pan map to bus only when user hasn't manually moved it
+  if (autoFollow) {
+    const dist = haversineKm(busMarker.getLatLng().lat, busMarker.getLatLng().lng, lat, lng);
+    if (dist > 0.05) {
+      // Tag as programmatic move so our listener ignores it
+      map._autoMove = true;
+      map.panTo([lat, lng], { animate: true, duration: 1.5 });
+      setTimeout(() => { map._autoMove = false; }, 2000);
+    }
+  }
 
-  updateStatusBadge(data.status || 'active');
-  updateETA(data.latitude, data.longitude, speed);
-  updateMap(data.latitude, data.longitude, data.busNumber);
-  startLastUpdatedTimer();
+  setTimeout(() => map && map.invalidateSize(), 200);
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function fmtDist(m) {
+  if (m == null) return '';
+  return m < 1000 ? m + 'm' : (m/1000).toFixed(1) + 'km';
 }
 
 // ── Status badge ───────────────────────────────────────────────────────────
 const STATUS_MAP = {
-  active:       { cls:'badge-active',       icon:'🟢', label:'Live' },
-  offline:      { cls:'badge-offline',      icon:'🟡', label:'Offline' },
-  disconnected: { cls:'badge-disconnected', icon:'🔴', label:'Disconnected' },
-  ended:        { cls:'badge-ended',        icon:'⚫', label:'Trip Ended' }
+  active:       { cls:'badge-active',       html:'<span class="live-dot"></span> Live' },
+  offline:      { cls:'badge-offline',      html:'🟡 Offline' },
+  disconnected: { cls:'badge-disconnected', html:'🔴 Disconnected' },
+  ended:        { cls:'badge-ended',        html:'⚫ Trip Ended' }
 };
-
-function updateStatusBadge(status) {
-  const s = STATUS_MAP[status] || STATUS_MAP.active;
-  const badge = document.getElementById('statusBadge');
-  badge.className = 'status-badge ' + s.cls;
-  badge.innerHTML = s.icon + ' ' + s.label;
-  document.getElementById('infoStatus').textContent = s.label;
-  const bar = document.getElementById('lastUpdatedBar');
-  bar.className = 'last-updated-bar' + (status !== 'active' ? ' stale' : '');
+function setStatus(s) {
+  const m = STATUS_MAP[s] || STATUS_MAP.active;
+  document.getElementById('statusBadge').className = 'status-badge ' + m.cls;
+  document.getElementById('statusBadge').innerHTML = m.html;
+  document.getElementById('infoStatus').textContent = s.charAt(0).toUpperCase() + s.slice(1);
+  const bar = document.getElementById('updatedBar');
+  if (s !== 'active') bar.classList.add('stale'); else bar.classList.remove('stale');
 }
 
-// ── Last-updated rolling timer ─────────────────────────────────────────────
-function startLastUpdatedTimer() {
-  clearInterval(lastUpdatedTimer);
-  lastUpdatedTimer = setInterval(() => {
+// ── Last-updated timer ─────────────────────────────────────────────────────
+function startUpdatedTimer() {
+  clearInterval(updatedTimer);
+  lastUpdateTime = new Date();
+  updatedTimer = setInterval(() => {
     if (!lastUpdateTime) return;
     const secs = Math.round((Date.now() - lastUpdateTime) / 1000);
-    let txt;
-    if (secs < 15)       txt = 'Just now';
-    else if (secs < 60)  txt = secs + ' seconds ago';
-    else                 txt = Math.round(secs/60) + ' minutes ago';
-    document.getElementById('lastUpdatedText').textContent = txt;
-    if (secs > 90) document.getElementById('lastUpdatedBar').className = 'last-updated-bar stale';
+    const txt = secs < 10 ? 'Just now' : secs < 60 ? secs + 's ago' : Math.round(secs/60) + ' min ago';
+    document.getElementById('updatedText').textContent = txt;
+    document.getElementById('infoLastUpdate').textContent = txt;
+    if (secs > 90) document.getElementById('updatedBar').classList.add('stale');
+    else           document.getElementById('updatedBar').classList.remove('stale');
   }, 5000);
 }
 
-// ── ETA & distance (rough Haversine) ──────────────────────────────────────
-function haversineKm(lat1,lng1,lat2,lng2) {
-  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-function updateETA(lat, lng, speedKmh) {
-  // Use Nippani as destination approximation
-  const destLat=16.41, destLng=74.46;
+// ── ETA ────────────────────────────────────────────────────────────────────
+function updateETA(lat, lng, speed) {
+  let destLat = 16.41, destLng = 74.46;
+  if (currentStops.length) {
+    const last = currentStops[currentStops.length - 1];
+    if (last.latitude) { destLat = last.latitude; destLng = last.longitude; }
+  }
   const dist = haversineKm(lat, lng, destLat, destLng);
-  document.getElementById('statDist').textContent = dist.toFixed(1) + ' km';
-  if (speedKmh > 5) {
-    const mins = Math.round((dist / speedKmh) * 60);
-    document.getElementById('statEta').textContent = mins < 2 ? 'Arrived' : '~' + mins + ' min';
+  document.getElementById('statDist').textContent = dist.toFixed(1);
+  if (speed > 5) {
+    const mins = Math.round((dist / speed) * 60);
+    document.getElementById('statEta').textContent = mins < 2 ? 'Here' : '~' + mins + 'm';
   } else {
     document.getElementById('statEta').textContent = '—';
   }
 }
 
-// ── Load GPS history (polyline) ────────────────────────────────────────────
-async function loadHistory(busNum) {
+// ── Stop Progress ──────────────────────────────────────────────────────────
+async function loadStopProgress(busData) {
+  const variantId = busData.variantId?._id || busData.variantId;
+  if (!variantId) {
+    document.getElementById('stopProgressPanel').style.display = 'none';
+    document.getElementById('stopSummary').style.display = 'none';
+    currentStops = [];
+    return;
+  }
   try {
-    const pts = await fetch(`/api/live/bus/${busNum}/history`).then(r=>r.json());
-    if (pts && pts.length > 1) {
-      pathPoints = pts.map(p => [p.latitude, p.longitude]);
-      if (polyline) polyline.setLatLngs(pathPoints);
+    const stops = await fetch('/api/variants/' + variantId + '/stops').then(r => r.json());
+    if (!stops.length) {
+      document.getElementById('stopProgressPanel').style.display = 'none';
+      document.getElementById('stopSummary').style.display = 'none';
+      currentStops = [];
+      return;
     }
-  } catch(e){}
+    currentStops = stops;
+    document.getElementById('stopVariantName').textContent = busData.variantId?.name || '';
+    document.getElementById('stopProgressPanel').style.display = 'block';
+    document.getElementById('stopSummary').style.display = 'grid';
+
+    const hasUngeocoded = stops.some(s => s.latitude === null);
+    document.getElementById('geocodeNotice').style.display = hasUngeocoded ? 'flex' : 'none';
+
+    currentStopIdx = typeof busData.currentStopIdx === 'number' ? busData.currentStopIdx : 0;
+    renderStopProgress(currentStopIdx, busData.nearestDistanceM);
+
+    // Auto-reload stops if geocoding is still in progress
+    if (hasUngeocoded) {
+      setTimeout(async () => {
+        try {
+          const fresh = await fetch('/api/variants/' + variantId + '/stops').then(r => r.json());
+          if (fresh.length) {
+            currentStops = fresh;
+            const stillPending = fresh.some(s => s.latitude === null);
+            document.getElementById('geocodeNotice').style.display = stillPending ? 'flex' : 'none';
+            renderStopProgress(currentStopIdx, null);
+          }
+        } catch(e) {}
+      }, 25000);
+    }
+  } catch(e) {
+    document.getElementById('stopProgressPanel').style.display = 'none';
+    document.getElementById('stopSummary').style.display = 'none';
+    currentStops = [];
+  }
 }
 
-// ── Show track view ────────────────────────────────────────────────────────
+function renderStopProgress(idx, nearestDistM) {
+  if (!currentStops.length) return;
+  currentStopIdx = idx;
+
+  const cur  = currentStops[idx];
+  const next = currentStops[idx + 1];
+  document.getElementById('summaryCurrentStop').textContent = cur  ? cur.name  : '—';
+  document.getElementById('summaryNextStop').textContent    = next ? next.name : 'Destination reached';
+  document.getElementById('stopMeta').textContent = (idx + 1) + ' / ' + currentStops.length + ' stops';
+
+  document.getElementById('stopList').innerHTML = currentStops.map((s, i) => {
+    let state;
+    if (i < idx)        state = 'done';
+    else if (i === idx) state = 'current';
+    else                state = 'upcoming';
+
+    // Show distance to current stop
+    const distLabel = (i === idx && nearestDistM != null)
+      ? `<span class="stop-dist">${fmtDist(nearestDistM)}</span>`
+      : '';
+
+    const badge = state === 'current'
+      ? `<span class="stop-tag-here">● Here</span>`
+      : state === 'done'
+        ? ` <span style="font-size:11px;color:#16a34a">✓</span>`
+        : '';
+
+    return `<div class="stop-row ${state}">
+      <div class="stop-circle ${state}">${state === 'done' ? '✓' : s.order}</div>
+      <span class="stop-text ${state}">${s.name}${badge}</span>
+      ${distLabel}
+    </div>`;
+  }).join('');
+}
+
+// ── Arrival toast notification ─────────────────────────────────────────────
+function showArrivalToast(stopName, nextStop) {
+  const existing = document.querySelector('.arrival-toast');
+  if (existing) existing.remove();
+
+  const el = document.createElement('div');
+  el.className = 'arrival-toast';
+  el.innerHTML = `🚏 Reached <strong>${stopName}</strong>` +
+    (nextStop ? ` → Next: <strong>${nextStop}</strong>` : ' (Destination)');
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ── Full info update on GPS event ──────────────────────────────────────────
+function updateInfo(data) {
+  if (!data.latitude || !data.longitude) return;
+
+  document.getElementById('busTitle').textContent = data.busNumber;
+  document.getElementById('infoBus').textContent  = data.busNumber;
+  document.getElementById('infoConductor').textContent = data.conductorName || data.conductorId?.name || '—';
+  document.getElementById('infoAccuracy').textContent  = data.accuracy ? '±' + data.accuracy + ' m' : '—';
+
+  if (data.routeId) {
+    document.getElementById('routeFrom').textContent = data.routeId.source || '—';
+    document.getElementById('routeTo').textContent   = data.routeId.destination || '—';
+  }
+
+  const variantName = data.variantId?.name;
+  const viaTag = document.getElementById('viaTag');
+  if (variantName) { viaTag.style.display = 'inline-flex'; document.getElementById('viaLabel').textContent = variantName; }
+  else              { viaTag.style.display = 'none'; }
+
+  const speed = data.speed || 0;
+  document.getElementById('statSpeed').textContent = speed;
+  document.getElementById('infoSpeed').textContent = speed + ' km/h';
+
+  setStatus(data.status || 'active');
+  updateETA(data.latitude, data.longitude, speed);
+  updateMap(data.latitude, data.longitude);
+  document.getElementById('updatedText').textContent = 'Just now';
+  document.getElementById('infoLastUpdate').textContent = 'Just now';
+  startUpdatedTimer();
+
+  // Update stop progress from server's currentStopIdx
+  if (typeof data.currentStopIdx === 'number' && currentStops.length) {
+    if (data.currentStopIdx >= currentStopIdx) {
+      renderStopProgress(data.currentStopIdx, data.nearestDistanceM ?? null);
+    }
+  }
+}
+
+// ── Show views ─────────────────────────────────────────────────────────────
 function showTrackView(data) {
-  document.getElementById('emptyState').style.display   = 'none';
-  document.getElementById('busListView').style.display  = 'none';
-  document.getElementById('trackView').style.display    = 'block';
-  socket.emit('trackBus', data.busNumber);
+  document.getElementById('emptyState').style.display  = 'none';
+  document.getElementById('busListView').style.display = 'none';
+  document.getElementById('trackView').style.display   = 'block';
   currentBus = data.busNumber;
+  socket.emit('trackBus', data.busNumber);
   updateInfo(data);
-  loadHistory(data.busNumber);
   loadStopProgress(data);
+  setTimeout(() => map && map.invalidateSize(), 300);
 }
 
 function showEmpty(title, msg) {
@@ -331,28 +577,22 @@ function showEmpty(title, msg) {
   document.getElementById('emptyState').style.display  = 'block';
   document.getElementById('emptyTitle').textContent = title;
   document.getElementById('emptyMsg').textContent   = msg;
-  if (!map) { initMap(); setTimeout(()=>map.invalidateSize(),300); }
+  if (!map) { initMap(); setTimeout(() => map.invalidateSize(), 300); }
 }
 
 // ── Search ─────────────────────────────────────────────────────────────────
 async function doSearch() {
   const busNum  = document.getElementById('busInput').value.trim().toUpperCase();
   const routeId = document.getElementById('routeSelect').value;
-  if (busNum) {
-    history.replaceState({},''  ,`/track?bus=${busNum}`);
-    await loadBus(busNum);
-  } else if (routeId) {
-    history.replaceState({},'', `/track?route=${routeId}`);
-    await loadRouteBuses(routeId);
-  } else {
-    showToast('Enter bus number or select route', 'error');
-  }
+  if (busNum)   { history.replaceState({}, '', `/track?bus=${busNum}`);     await loadBus(busNum); }
+  else if (routeId) { history.replaceState({}, '', `/track?route=${routeId}`); await loadRouteBuses(routeId); }
+  else showToast('Enter a bus number or select a route', 'error');
 }
 
 async function loadBus(busNum) {
+  document.getElementById('busInput').value = busNum;
   try {
-    document.getElementById('busInput').value = busNum;
-    const data = await fetch(`/api/live/bus/${busNum}`).then(r=>r.json());
+    const data = await fetch(`/api/live/bus/${busNum}`).then(r => r.json());
     if (data.message) { showEmpty('Bus Not Active', `Bus ${busNum} is not currently active.`); initMap(); }
     else showTrackView(data);
   } catch(e) { showEmpty('Error', 'Could not load bus data.'); }
@@ -360,7 +600,7 @@ async function loadBus(busNum) {
 
 async function loadRouteBuses(routeId) {
   try {
-    const buses = await fetch(`/api/live/route/${routeId}`).then(r=>r.json());
+    const buses = await fetch(`/api/live/route/${routeId}`).then(r => r.json());
     if (!buses.length) { showEmpty('No Active Buses', 'No buses active on this route right now.'); return; }
     if (buses.length === 1) { showTrackView(buses[0]); return; }
     document.getElementById('emptyState').style.display  = 'none';
@@ -368,122 +608,83 @@ async function loadRouteBuses(routeId) {
     document.getElementById('busListView').style.display = 'block';
     document.getElementById('busList').innerHTML = buses.map(b => `
       <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
-        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px">${b.busNumber}</div>
-        <span class="status-badge badge-active">🟢 Live</span>
-        <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px">Track →</button>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px">${b.busNumber}</div>
+        ${b.routeId ? `<div style="font-size:13px;color:var(--text-muted)">${b.routeId.source} → ${b.routeId.destination}</div>` : ''}
+        ${b.variantId?.name ? `<div class="via-tag" style="margin-top:6px">🔀 ${b.variantId.name}</div>` : ''}
+        <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px">📍 Track →</button>
       </div>`).join('');
-  } catch(e) { showEmpty('Error','Could not load buses.'); }
+  } catch(e) { showEmpty('Error', 'Could not load buses.'); }
 }
 
-// ── Socket.IO: real-time updates ───────────────────────────────────────────
+async function loadFromStopSearch(from, to) {
+  try {
+    const data = await fetch(
+      `/api/variants/search/stops?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    ).then(r => r.json());
+    if (!data.buses?.length) {
+      showEmpty(`No buses: ${from} → ${to}`, 'No active buses found. Check the timetable.'); initMap(); return;
+    }
+    if (data.buses.length === 1) { showTrackView(data.buses[0]); return; }
+    document.getElementById('emptyState').style.display  = 'none';
+    document.getElementById('trackView').style.display   = 'none';
+    document.getElementById('busListView').style.display = 'block';
+    document.getElementById('busListTitle').textContent  = `Buses: ${from} → ${to}`;
+    document.getElementById('busList').innerHTML = data.buses.map(b => `
+      <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
+        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">${b.busNumber}</div>
+        ${b.variantId?.name ? `<div class="via-tag" style="margin-top:6px">🔀 ${b.variantId.name}</div>` : ''}
+        <button class="btn btn-primary btn-sm btn-block" style="margin-top:10px">📍 Track →</button>
+      </div>`).join('');
+  } catch(e) { showEmpty('Search Error', 'Could not search. Try again.'); initMap(); }
+}
+
+// ── Socket events ──────────────────────────────────────────────────────────
 socket.on('locationUpdate', (data) => {
-  if (currentBus && data.busNumber === currentBus) {
-    updateInfo(data);
-  }
+  if (currentBus && data.busNumber === currentBus) updateInfo(data);
 });
 
 socket.on('globalLocationUpdate', (data) => {
+  if (currentBus && data.busNumber === currentBus) updateInfo(data);
+});
+
+// Bus reached a new stop — show arrival toast
+socket.on('reachedStop', (data) => {
   if (currentBus && data.busNumber === currentBus) {
-    updateInfo(data);
+    showArrivalToast(data.stopName, data.nextStop);
+    // Force re-render of stop progress immediately
+    if (currentStops.length) {
+      renderStopProgress(data.stopIdx, data.distanceM);
+    }
   }
 });
 
 socket.on('busStatus', (data) => {
   if (currentBus && data.busNumber === currentBus) {
-    updateStatusBadge(data.status);
-    const labels = { offline:'⚠️ Bus went offline', disconnected:'❌ Bus disconnected', active:'✅ Bus reconnected' };
-    if (labels[data.status]) showToast(labels[data.status], data.status === 'active' ? 'success' : 'error');
+    setStatus(data.status);
+    const msgs = { offline:'⚠️ Bus went offline', disconnected:'❌ Bus disconnected', active:'✅ Bus reconnected' };
+    if (msgs[data.status]) showToast(msgs[data.status], data.status === 'active' ? 'success' : 'error');
   }
 });
 
 socket.on('busInactive', (data) => {
   if (currentBus && data.busNumber === currentBus) {
-    updateStatusBadge('ended');
-    showToast('Trip has ended for bus ' + currentBus, 'error');
+    setStatus('ended');
+    showToast(`Trip ended for bus ${currentBus}`, 'error');
   }
 });
 
-function showToast(msg, type='') {
+function showToast(msg, type = '') {
   const t = document.createElement('div');
-  t.className = 'toast ' + type;
-  t.textContent = msg;
+  t.className = 'toast ' + type; t.textContent = msg;
   document.getElementById('toastContainer').appendChild(t);
   setTimeout(() => t.remove(), 4000);
 }
 
-// ── Stop Progress ──────────────────────────────────────────────────────────
-let currentStops = [];
-
-async function loadStopProgress(busData) {
-  const variantId = busData.variantId?._id || busData.variantId;
-  if (!variantId) { document.getElementById('stopProgressPanel').style.display='none'; return; }
-
-  try {
-    const stops = await fetch('/api/variants/'+variantId+'/stops').then(r=>r.json());
-    if (!stops.length) { document.getElementById('stopProgressPanel').style.display='none'; return; }
-
-    currentStops = stops;
-    const variantName = busData.variantId?.name || '';
-    document.getElementById('variantNameLabel').textContent = variantName;
-    document.getElementById('stopProgressPanel').style.display = 'block';
-
-    renderStopProgress(busData.latitude, busData.longitude);
-  } catch(e) {
-    document.getElementById('stopProgressPanel').style.display='none';
-  }
-}
-
-function renderStopProgress(busLat, busLng) {
-  if (!currentStops.length) return;
-  // Find closest stop to current bus position
-  let closestIdx = 0, minDist = Infinity;
-  currentStops.forEach((s, i) => {
-    if (s.latitude && s.longitude) {
-      const d = haversineKm(busLat, busLng, s.latitude, s.longitude);
-      if (d < minDist) { minDist = d; closestIdx = i; }
-    }
-  });
-  // Without stop coordinates, we show all stops without a current highlight
-  // (can be enhanced later when stop coordinates are added)
-  const list = document.getElementById('stopProgressList');
-  list.innerHTML = currentStops.map((s, i) => {
-    let state = 'upcoming';
-    // Simple heuristic: if we don't have stop coords, show first stop as departed, rest upcoming
-    // When stop coords are available, closestIdx is used
-    let tag = '';
-    let stateClass = 'upcoming';
-    if (stateClass === 'current') tag = '<span class="stop-tag current-tag">● Bus here</span>';
-    return `<div class="stop-progress-item ${stateClass}">
-      <div class="stop-dot ${stateClass}">${s.order}</div>
-      <span class="stop-label ${stateClass}">${s.name}${tag}</span>
-    </div>`;
-  }).join('');
-}
-
 // ── Init ───────────────────────────────────────────────────────────────────
 loadRoutes();
-if (busParam) { loadBus(busParam.toUpperCase()); }
-else if (routeParam) { loadRouteBuses(routeParam); }
-else if (fromParam && toParam) {
-  // Came from stop search
-  document.getElementById('busInput').value = '';
-  showEmpty('Stop Search', `Showing buses from ${fromParam} → ${toParam}`);
-  initMap();
-  // Show result inline
-  fetch('/api/variants/search/stops?from='+encodeURIComponent(fromParam)+'&to='+encodeURIComponent(toParam))
-    .then(r=>r.json()).then(data => {
-      if (data.buses?.length === 1) { showTrackView(data.buses[0]); }
-      else if (data.buses?.length > 1) {
-        document.getElementById('emptyState').style.display='none';
-        document.getElementById('busListView').style.display='block';
-        document.getElementById('busList').innerHTML = data.buses.map(b=>`
-          <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
-            <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">${b.busNumber}</div>
-            <button class="btn btn-primary btn-sm btn-block" style="margin-top:10px">Track →</button>
-          </div>`).join('');
-      }
-    }).catch(()=>{});
-}
+if (busParam)              loadBus(busParam.toUpperCase());
+else if (routeParam)       loadRouteBuses(routeParam);
+else if (fromParam&&toParam) loadFromStopSearch(fromParam, toParam);
 else { showEmpty('Search for a Bus', 'Enter a bus number or select a route above.'); initMap(); }
 </script>
 </body>
