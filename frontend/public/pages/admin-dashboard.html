@@ -6,9 +6,9 @@
   <title>Admin Dashboard - KSRTC v2</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    .section-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:28px; overflow:hidden; }
-    .sec-head { background:var(--primary); color:white; padding:16px 24px; display:flex; justify-content:space-between; align-items:center; }
-    .sec-head h3 { font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700; }
+    .section-card { background:var(--white); border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow-sm); margin-bottom:24px; overflow:hidden; }
+    .sec-head { background:var(--primary); color:white; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; }
+    .sec-head h3 { font-family:'Plus Jakarta Sans',sans-serif; font-size:16px; font-weight:700; }
     .sec-body { padding:24px; }
     .add-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid var(--border); }
     .add-row .form-control { min-width:160px; flex:1; }
@@ -54,7 +54,7 @@
     <div class="stat-card"><div class="stat-icon orange">👤</div><div><div class="stat-value" id="sConductors">—</div><div class="stat-label">Conductors</div></div></div>
     <div class="stat-card"><div class="stat-icon purple">🗺️</div><div><div class="stat-value" id="sRoutes">—</div><div class="stat-label">Routes</div></div></div>
   </div>
-  <div style="margin-top:24px;padding:18px;background:var(--surface2);border-radius:var(--radius);border:1px dashed var(--border)">
+  <div style="margin-top:24px;padding:18px;background:var(--warning-light);border-radius:var(--radius);border:1px dashed #fde68a">
     <strong>🔐 First-time setup?</strong>
     <button class="btn btn-sm btn-outline" style="margin-left:12px" onclick="seed()">Seed Default Users</button>
     <span style="font-size:13px;color:var(--text-muted);margin-left:8px">admin/ksrtc@2024 | conductor1,2 / pass@123</span>
@@ -86,7 +86,6 @@
 <!-- ── CONDUCTORS ────────────────────────────────────────────────────────── -->
 <div id="sec-conductors" style="display:none">
   <div class="page-header"><h1>👤 Conductor Management</h1><p>Add, edit, delete conductors</p></div>
-
   <div class="section-card">
     <div class="sec-head"><h3>All Conductors</h3>
       <button class="btn btn-sm" style="background:rgba(255,255,255,0.2);color:white" onclick="openAddConductor()">+ Add Conductor</button>
@@ -125,10 +124,7 @@
 <!-- ── ROUTES ─────────────────────────────────────────────────────────────── -->
 <div id="sec-routes" style="display:none">
   <div class="page-header"><h1>🗺️ Route Management</h1><p>Routes → Variants → Stops</p></div>
-
-  <!-- Three-panel layout: Routes | Variants | Stops -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;align-items:start" id="routePanel">
-
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:start" id="routePanel">
     <!-- ROUTES -->
     <div class="section-card">
       <div class="sec-head"><h3>Routes</h3></div>
@@ -143,7 +139,6 @@
         </div>
       </div>
     </div>
-
     <!-- VARIANTS -->
     <div class="section-card" id="variantPanel" style="opacity:0.4;pointer-events:none">
       <div class="sec-head">
@@ -160,7 +155,6 @@
         </div>
       </div>
     </div>
-
     <!-- STOPS -->
     <div class="section-card" id="stopPanel" style="opacity:0.4;pointer-events:none">
       <div class="sec-head">
@@ -171,7 +165,7 @@
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)">
           <input class="form-control" id="sName" placeholder="Stop name (e.g. Kurli)"/>
           <button class="btn btn-primary" onclick="addStop()">+ Add Stop</button>
-          <div style="font-size:11px;color:var(--text-muted);padding:6px 8px;background:var(--surface2);border-radius:6px">
+          <div style="font-size:11px;color:var(--text-muted);padding:6px 8px;background:var(--gray-50);border-radius:6px">
             📍 = geocoded &nbsp; ⏳ = in progress &nbsp; ❓ = tap to retry
           </div>
         </div>
@@ -180,25 +174,23 @@
         </div>
       </div>
     </div>
-
   </div>
-
   <style>
     .route-item, .variant-item, .stop-item {
       display:flex; align-items:center; gap:8px; padding:10px 12px;
       border-radius:8px; cursor:pointer; border:2px solid transparent;
-      background:var(--surface2); font-size:14px; transition:all 0.15s;
+      background:var(--gray-50); font-size:14px; transition:all 0.15s;
     }
-    .route-item:hover, .variant-item:hover { background:#dbeafe; }
-    .route-item.selected { border-color:var(--primary); background:#dbeafe; font-weight:600; }
-    .variant-item.selected { border-color:var(--success); background:#dcfce7; font-weight:600; }
-    .stop-item { cursor:default; background:white; border:1px solid var(--border); }
+    .route-item:hover, .variant-item:hover { background:var(--primary-50); }
+    .route-item.selected { border-color:var(--primary); background:var(--primary-50); font-weight:600; }
+    .variant-item.selected { border-color:var(--success); background:var(--success-light); font-weight:600; }
+    .stop-item { cursor:default; background:var(--white); border:1px solid var(--border); }
     .stop-order { width:22px; height:22px; border-radius:50%; background:var(--primary); color:white; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
     .stop-name { flex:1; }
     .item-del { background:none; border:none; cursor:pointer; color:var(--danger); font-size:16px; padding:2px 4px; border-radius:4px; }
-    .item-del:hover { background:#fee2e2; }
+    .item-del:hover { background:var(--danger-light); }
     .item-edit { background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:14px; padding:2px 4px; border-radius:4px; }
-    .item-edit:hover { background:#e2e8f0; }
+    .item-edit:hover { background:var(--gray-100); }
     @media(max-width:900px){ #routePanel { grid-template-columns:1fr; } }
   </style>
 </div>
@@ -241,7 +233,7 @@
 </div>
 
 </main>
-</div><!-- /dashboard -->
+</div>
 
 <!-- MOBILE TOGGLE -->
 <button class="mobile-toggle" onclick="toggleSidebar()">☰</button>
@@ -522,10 +514,8 @@ async function deleteBus(id,bn) {
 let selectedRouteId = null;
 let selectedVariantId = null;
 
-// ── Routes ─────────────────────────────────────────────────────────────────
 async function loadRoutes() {
   const list = await fetch('/api/routes').then(r=>r.json()).catch(()=>[]);
-  // Refresh timetable dropdown
   const sel = document.getElementById('ttRoute');
   if (sel) {
     sel.innerHTML = '<option value="">Select Route...</option>';
@@ -662,7 +652,7 @@ function clearVariantPanel() {
 }
 
 // ── Stops ──────────────────────────────────────────────────────────────────
-let cachedStops = [];  // used for up/down reorder
+let cachedStops = [];
 
 async function loadStops() {
   if (!selectedVariantId) return;
@@ -696,7 +686,7 @@ function renderStopList(list) {
         <button class="item-edit" onclick="moveStop('${s._id}','up')" title="Move up" ${i===0?'disabled style="opacity:0.3"':''}>▲</button>
         <button class="item-edit" onclick="moveStop('${s._id}','down')" title="Move down" ${i===list.length-1?'disabled style="opacity:0.3"':''}>▼</button>
         <button class="item-edit" onclick="editStop('${s._id}','${s.name.replace(/'/g,"\\'")}')" title="Edit">✏️</button>
-        <button class="item-del" onclick="deleteStop('${s._id}','${s.name.replace(/'/g,"\\'")}')">✕</button>
+        <button class="item-del" onclick="deleteStop('${s._id}','${s.name.replace(/'/g,"\\'")}')" >✕</button>
       </div>
     </div>`;
   }).join('');
@@ -707,8 +697,6 @@ async function moveStop(stopId, direction) {
   if (idx === -1) return;
   const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
   if (targetIdx < 0 || targetIdx >= cachedStops.length) return;
-
-  // Swap orders
   const a = cachedStops[idx];
   const b = cachedStops[targetIdx];
   const newStops = cachedStops.map(s => {
@@ -716,11 +704,8 @@ async function moveStop(stopId, direction) {
     if (s._id === b._id) return { ...s, order: a.order };
     return s;
   }).sort((x, y) => x.order - y.order);
-
   cachedStops = newStops;
-  renderStopList(newStops);  // optimistic update
-
-  // Persist to server
+  renderStopList(newStops);
   try {
     await fetch('/api/variants/' + selectedVariantId + '/stops/reorder/bulk', {
       method: 'PUT', headers: H,
@@ -858,7 +843,6 @@ function logout() {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 loadStats();
-// Auto-refresh live section every 15s
 setInterval(() => { if (currentSection==='live') loadLive(); }, 15000);
 </script>
 </body>

@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta name="theme-color" content="#003d7a">
+  <meta name="theme-color" content="#991b1b">
   <title>Conductor Dashboard - KSRTC</title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    body { background: #f0f4f8; }
+    body { background: var(--bg); }
     .top-bar {
-      background: linear-gradient(135deg,var(--primary-dark),var(--primary));
+      background: var(--primary);
       color: white;
       padding: 14px 20px;
       display: flex;
@@ -18,9 +18,9 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+      box-shadow: var(--shadow-md);
     }
-    .top-bar h1 { font-family:'Rajdhani',sans-serif; font-size:18px; font-weight:700; }
+    .top-bar h1 { font-family:'Plus Jakarta Sans',sans-serif; font-size:18px; font-weight:700; }
     .top-bar p  { font-size:12px; opacity:0.8; }
   </style>
 </head>
@@ -47,7 +47,7 @@
 <div class="conductor-mobile">
 
   <!-- STATUS RING -->
-  <div style="text-align:center;padding:20px 0 12px">
+  <div style="text-align:center;padding:24px 0 16px">
     <div class="status-ring idle" id="statusRing">
       <div class="ring-icon" id="ringIcon">🚌</div>
       <div id="ringLabel">Ready</div>
@@ -61,10 +61,10 @@
     <div class="info-chip" id="lastChip">🕐 Last: —</div>
   </div>
 
-  <!-- SETUP FORM (shown when no active trip) -->
+  <!-- SETUP FORM -->
   <div id="setupPanel">
     <div class="card" style="margin-bottom:16px">
-      <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:16px">Start New Trip</h3>
+      <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:700;margin-bottom:16px">Start New Trip</h3>
       <div class="form-group">
         <label class="form-label">Bus Number</label>
         <select class="form-control form-select" id="busSelect">
@@ -89,12 +89,12 @@
     </button>
   </div>
 
-  <!-- ACTIVE TRIP (shown during active trip) -->
+  <!-- ACTIVE TRIP -->
   <div id="activePanel" style="display:none">
     <div class="card" style="margin-bottom:16px">
       <div class="info-row">
         <span class="info-label">Bus</span>
-        <strong class="info-value" id="activeBusLabel" style="font-family:'Rajdhani',sans-serif;font-size:20px">—</strong>
+        <strong class="info-value" id="activeBusLabel" style="font-family:'Plus Jakarta Sans',sans-serif;font-size:20px;font-weight:800">—</strong>
       </div>
       <div class="info-row">
         <span class="info-label">Route</span>
@@ -117,7 +117,7 @@
     <!-- GPS Log -->
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:10px">GPS LOG</div>
-      <div id="gpsLog" style="font-family:monospace;font-size:12px;max-height:120px;overflow-y:auto;color:var(--text-muted)">
+      <div id="gpsLog" style="font-family:monospace;font-size:12px;max-height:120px;overflow-y:auto;color:var(--text-muted);background:var(--gray-50);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border)">
         Waiting for GPS...
       </div>
     </div>
@@ -131,7 +131,7 @@
     </div>
   </div>
 
-</div><!-- /conductor-mobile -->
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -155,10 +155,9 @@ let currentRouteId = null;
 let currentRouteName = null;
 let currentVariantId = null;
 let lastSendMs = 0;
-let offlineQueue = [];  // GPS updates queued while offline
+let offlineQueue = [];
 let isOnline = navigator.onLine;
 
-// Restore state from localStorage (handles page refresh)
 const savedTrip = (() => {
   try { return JSON.parse(localStorage.getItem('activeTrip')); } catch{ return null; }
 })();
@@ -169,7 +168,6 @@ function connectSocket() {
 
   socket.on('connect', () => {
     updateNetChip(true);
-    // Attempt trip restore on reconnect
     if (tripActive && currentBus && currentTripId) {
       socket.emit('restoreTrip', {
         busNumber: currentBus,
@@ -178,7 +176,6 @@ function connectSocket() {
         conductorName
       });
     }
-    // Flush queued updates
     flushQueue();
   });
 
@@ -306,7 +303,7 @@ function handlePosition(pos) {
   document.getElementById('accuracyLabel').textContent = '±' + Math.round(accuracy) + ' m';
 
   const now = Date.now();
-  if (now - lastSendMs < 9500) return; // ~10s throttle
+  if (now - lastSendMs < 9500) return;
   lastSendMs = now;
 
   const payload = {
@@ -417,7 +414,7 @@ function updateNetChip(online) {
 function addLog(msg) {
   const log = document.getElementById('gpsLog');
   const d = document.createElement('div');
-  d.style.cssText = 'padding:2px 0;border-bottom:1px solid #f1f5f9';
+  d.style.cssText = 'padding:2px 0;border-bottom:1px solid var(--gray-200)';
   d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
   log.insertBefore(d, log.firstChild);
   if (log.children.length > 30) log.removeChild(log.lastChild);
@@ -438,7 +435,7 @@ function showToast(msg, type = '') {
   setTimeout(() => t.remove(), 4000);
 }
 
-// ── Trip persistence (refresh recovery) ───────────────────────────────────
+// ── Trip persistence ───────────────────────────────────────────────────────
 function saveTrip() {
   localStorage.setItem('activeTrip', JSON.stringify({
     busNumber: currentBus,
@@ -486,9 +483,6 @@ window.addEventListener('offline', () => {
   if (tripActive) setRing('offline');
 });
 
-// ── Page close warning ─────────────────────────────────────────────────────
-// IMPORTANT: Browsers cannot send GPS after tab is fully closed.
-// This warning gives conductor a chance to manually stop.
 window.addEventListener('beforeunload', (e) => {
   if (!tripActive) return;
   e.preventDefault();
@@ -496,17 +490,14 @@ window.addEventListener('beforeunload', (e) => {
   return e.returnValue;
 });
 
-// ── Page visibility (screen lock / background tab) ────────────────────────
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && tripActive) {
-    // Reconnect & ensure GPS is still running
     if (!socket.connected) socket.connect();
     if (watchId === null) startWatching();
     showToast('Welcome back! Trip is still active.', '');
   }
 });
 
-// ── Logout ────────────────────────────────────────────────────────────────
 function logout() {
   if (tripActive) {
     if (!confirm('You have an active trip! Stop trip before logging out?')) return;
@@ -526,7 +517,6 @@ updateNetChip(isOnline);
 connectSocket();
 loadData();
 
-// Restore active trip from localStorage (handles page refresh)
 if (savedTrip) {
   currentBus       = savedTrip.busNumber;
   currentRouteId   = savedTrip.routeId;
@@ -538,11 +528,9 @@ if (savedTrip) {
   document.getElementById('activeBusLabel').textContent = currentBus;
   document.getElementById('activeRouteLabel').textContent = currentRouteName;
 
-  // socket.on('connect') will fire restoreTrip — just start GPS now
   setRing('connecting');
   showActivePanel();
 
-  // Wait for socket connect, then restore will be emitted in connectSocket()
   navigator.geolocation.getCurrentPosition(
     (pos) => { startWatching(); setRing('active'); },
     ()    => { setRing('offline'); showToast('Could not get GPS after refresh', 'error'); }

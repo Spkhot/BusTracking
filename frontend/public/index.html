@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KSRTC Nippani - Live Bus Tracker</title>
+  <title>KSRTC Nippani Depot — Live Bus Tracker</title>
+  <meta name="description" content="Track KSRTC Nippani Depot buses in real time. Live GPS tracking for Karnataka State Road Transport Corporation buses.">
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/aos@2.3.4/dist/aos.css">
+  <link rel="stylesheet" href="https://unpkg.com/lucide-static@0.263.1/font/lucide.css">
 </head>
 <body>
 
@@ -31,21 +34,34 @@
   <!-- HERO -->
   <section class="hero">
     <div class="hero-content">
-      <h1>Track Your <span>KSRTC Bus</span><br>In Real Time</h1>
-      <p>Live GPS tracking for Nippani Depot buses. Know exactly where your bus is.</p>
+      <div class="hero-text">
+        <div class="hero-badge">
+          <span class="dot"></span>
+          Live Tracking Available
+        </div>
+        <h1>Track Your<br><span>KSRTC Bus</span><br>In Real Time</h1>
+        <p>Karnataka State Road Transport Corporation — Nippani Depot. Know exactly where your bus is, its speed, and estimated arrival time.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <a href="/track" class="btn btn-ghost btn-lg">📍 Track a Bus</a>
+          <a href="/timetable" class="btn btn-ghost btn-lg" style="border-color:rgba(255,255,255,0.15)">🕐 View Timetable</a>
+        </div>
+      </div>
 
       <!-- SEARCH BOX -->
       <div class="search-box">
+        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:700;margin-bottom:4px;color:var(--gray-900)">🔍 Find Your Bus</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">Search by bus number, route, or stops</div>
+
         <div class="search-tabs">
-          <button class="search-tab active" data-tab="bus">🔍 By Bus No.</button>
-          <button class="search-tab" data-tab="route">🗺️ By Route</button>
-          <button class="search-tab" data-tab="stop">📍 By Stop</button>
+          <button class="search-tab active" data-tab="bus">By Bus No.</button>
+          <button class="search-tab" data-tab="route">By Route</button>
+          <button class="search-tab" data-tab="stop">By Stop</button>
         </div>
 
         <div id="tabBus">
           <div class="search-form">
             <input class="search-input" id="busInput" type="text" placeholder="e.g. KA22F1234" autocomplete="off" />
-            <button class="btn btn-primary" onclick="trackBus()">Track Bus</button>
+            <button class="btn btn-primary" onclick="trackBus()">Track</button>
           </div>
         </div>
 
@@ -54,15 +70,15 @@
             <select class="search-input form-select" id="routeSelect">
               <option value="">Select Route...</option>
             </select>
-            <button class="btn btn-primary" onclick="trackRoute()">Find Buses</button>
+            <button class="btn btn-primary" onclick="trackRoute()">Find</button>
           </div>
         </div>
 
         <div id="tabStop" style="display:none">
           <div class="search-form" style="flex-direction:column;gap:10px">
             <div style="display:flex;gap:10px">
-              <input class="search-input" id="fromStop" type="text" placeholder="From stop (e.g. Nippani)" style="flex:1"/>
-              <input class="search-input" id="toStop"   type="text" placeholder="To stop (e.g. Kurli)"    style="flex:1"/>
+              <input class="search-input" id="fromStop" type="text" placeholder="From (e.g. Nippani)" style="flex:1"/>
+              <input class="search-input" id="toStop" type="text" placeholder="To (e.g. Belgaum)" style="flex:1"/>
             </div>
             <button class="btn btn-primary btn-block" onclick="searchByStop()">🔍 Find Buses</button>
           </div>
@@ -73,10 +89,13 @@
   </section>
 
   <!-- ACTIVE BUSES -->
-  <section class="section" style="padding-top:32px">
+  <section class="section" style="padding-top:48px">
     <div class="container">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">🟢 Buses Active Now</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px" data-aos="fade-up">
+        <div>
+          <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800;color:var(--text)">Active Buses</h2>
+          <p style="font-size:14px;color:var(--text-muted);margin-top:2px">Currently running buses from Nippani Depot</p>
+        </div>
         <span id="activeBusCount" class="live-badge"><span class="live-dot"></span> Live</span>
       </div>
       <div id="activeBuses" class="grid-3">
@@ -89,9 +108,12 @@
   </section>
 
   <!-- POPULAR ROUTES -->
-  <section class="section" style="background:white;padding:40px 0">
+  <section class="section" style="background:var(--white);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
     <div class="container">
-      <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;margin-bottom:20px">🗺️ Popular Routes</h2>
+      <div style="margin-bottom:28px" data-aos="fade-up">
+        <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800;color:var(--text)">🗺️ Routes</h2>
+        <p style="font-size:14px;color:var(--text-muted);margin-top:2px">Popular routes from Nippani Depot</p>
+      </div>
       <div id="popularRoutes" class="grid-3">
         <!-- Loaded dynamically -->
       </div>
@@ -101,34 +123,53 @@
   <!-- HOW IT WORKS -->
   <section class="section">
     <div class="container">
-      <h2 style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;text-align:center;margin-bottom:32px">How It Works</h2>
+      <div style="text-align:center;margin-bottom:48px" data-aos="fade-up">
+        <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800">How It Works</h2>
+        <p style="color:var(--text-muted);margin-top:6px">Three simple steps to track your bus in real time</p>
+      </div>
       <div class="grid-3">
-        <div class="card" style="text-align:center">
-          <div style="font-size:40px;margin-bottom:16px">📱</div>
-          <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:8px">Conductor Starts Trip</h3>
-          <p style="font-size:14px;color:var(--text-muted)">Conductor logs in, selects bus & route, starts trip sharing GPS.</p>
+        <div class="card" style="text-align:center;border-top:3px solid var(--primary)" data-aos="fade-up" data-aos-delay="0">
+          <div style="width:64px;height:64px;background:var(--primary-50);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">📱</div>
+          <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:700;margin-bottom:8px">Conductor Starts Trip</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6">Conductor logs in, selects bus & route, and starts sharing live GPS location.</p>
         </div>
-        <div class="card" style="text-align:center">
-          <div style="font-size:40px;margin-bottom:16px">📡</div>
-          <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:8px">GPS Sent Every 10s</h3>
-          <p style="font-size:14px;color:var(--text-muted)">Bus location is broadcast to all passengers in real time.</p>
+        <div class="card" style="text-align:center;border-top:3px solid var(--accent)" data-aos="fade-up" data-aos-delay="100">
+          <div style="width:64px;height:64px;background:var(--warning-light);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">📡</div>
+          <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:700;margin-bottom:8px">GPS Sent Every 10s</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6">Bus location is broadcast to all passengers in real time via live GPS signals.</p>
         </div>
-        <div class="card" style="text-align:center">
-          <div style="font-size:40px;margin-bottom:16px">🗺️</div>
-          <h3 style="font-family:'Rajdhani',sans-serif;font-size:18px;margin-bottom:8px">Passenger Tracks Bus</h3>
-          <p style="font-size:14px;color:var(--text-muted)">Live map updates without page refresh. Know ETA instantly.</p>
+        <div class="card" style="text-align:center;border-top:3px solid var(--success)" data-aos="fade-up" data-aos-delay="200">
+          <div style="width:64px;height:64px;background:var(--success-light);border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px">🗺️</div>
+          <h3 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:17px;font-weight:700;margin-bottom:8px">Passenger Tracks Bus</h3>
+          <p style="font-size:14px;color:var(--text-muted);line-height:1.6">Live map updates without page refresh. Know speed, ETA and stop progress.</p>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- DEPOT INFO -->
+  <section style="position:relative;overflow:hidden;padding:0">
+    <div style="display:grid;grid-template-columns:1fr 1fr;min-height:320px" data-aos="fade-up">
+      <div style="background:url('/img/depot.png') center/cover;min-height:260px"></div>
+      <div style="background:var(--gray-900);color:white;padding:48px 40px;display:flex;flex-direction:column;justify-content:center">
+        <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;font-weight:800;margin-bottom:12px">Nippani Depot</h2>
+        <p style="color:rgba(255,255,255,0.65);font-size:15px;line-height:1.7;margin-bottom:24px">Karnataka State Road Transport Corporation (KSRTC) Nippani Depot serves the Belgaum district with regular bus services connecting Nippani to major towns across Karnataka and Maharashtra.</p>
+        <a href="/timetable" class="btn btn-primary" style="align-self:flex-start">View Full Timetable →</a>
+      </div>
+    </div>
+  </section>
+
   <footer class="footer">
-    <strong>KSRTC Nippani Depot</strong> — Live Bus Tracking System &nbsp;|&nbsp; Karnataka State Road Transport Corporation
+    <div style="margin-bottom:8px"><strong>KSRTC Nippani Depot</strong> — Live Bus Tracking System</div>
+    <div style="font-size:12px;opacity:0.6">Karnataka State Road Transport Corporation &nbsp;•&nbsp; Government of Karnataka</div>
   </footer>
 
   <div class="toast-container" id="toastContainer"></div>
 
+  <script src="https://unpkg.com/aos@2.3.4/dist/aos.js"></script>
   <script>
+    AOS.init({ duration: 600, once: true, offset: 60 });
+
     const API = '';
 
     // Hamburger menu
@@ -143,6 +184,7 @@
         tab.classList.add('active');
         document.getElementById('tabBus').style.display = tab.dataset.tab === 'bus' ? 'block' : 'none';
         document.getElementById('tabRoute').style.display = tab.dataset.tab === 'route' ? 'block' : 'none';
+        document.getElementById('tabStop').style.display = tab.dataset.tab === 'stop' ? 'block' : 'none';
       });
     });
 
@@ -189,9 +231,9 @@
           const routeLabel = b.routeId ? `${b.routeId.source} → ${b.routeId.destination}` : '';
           const variant = data.variants.find(v => v._id === (b.variantId?._id || b.variantId));
           const variantLabel = variant ? variant.name : '';
-          return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          return `<div style="background:var(--success-light);border:1px solid #a7f3d0;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
             <div>
-              <strong style="font-family:'Rajdhani',sans-serif;font-size:18px">${b.busNumber}</strong>
+              <strong style="font-family:'Plus Jakarta Sans',sans-serif;font-size:16px">${b.busNumber}</strong>
               <div style="font-size:13px;color:var(--text-muted)">${routeLabel}${variantLabel ? ' · '+variantLabel : ''}</div>
               <div style="font-size:12px;color:var(--success);margin-top:2px">🟢 Live now</div>
             </div>
@@ -213,7 +255,7 @@
         routes.forEach((r, i) => {
           sel.innerHTML += `<option value="${r._id}">${r.source} → ${r.destination}</option>`;
           popular.innerHTML += `
-            <div class="route-card" onclick="window.location.href='/track?route=${r._id}'">
+            <div class="route-card" onclick="window.location.href='/track?route=${r._id}'" data-aos="fade-up" data-aos-delay="${i * 80}">
               <div class="route-icon">🚌</div>
               <div>
                 <div class="route-name">${r.source} → ${r.destination}</div>
@@ -241,13 +283,13 @@
           </div>`;
           return;
         }
-        container.innerHTML = buses.map(b => `
-          <div class="card" style="cursor:pointer" onclick="window.location.href='/track?bus=${b.busNumber}'">
+        container.innerHTML = buses.map((b, i) => `
+          <div class="card" style="cursor:pointer;border-left:4px solid var(--success)" onclick="window.location.href='/track?bus=${b.busNumber}'" data-aos="fade-up" data-aos-delay="${i * 80}">
             <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
-              <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700">${b.busNumber}</div>
+              <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;color:var(--primary)">${b.busNumber}</div>
               <span class="live-badge"><span class="live-dot"></span> Live</span>
             </div>
-            <div style="font-size:14px;color:var(--text-muted);margin-bottom:12px">
+            <div style="font-size:14px;color:var(--text-muted);margin-bottom:14px">
               ${b.routeId ? `${b.routeId.source} → ${b.routeId.destination}` : 'Route info unavailable'}
             </div>
             <button class="btn btn-primary btn-sm btn-block">📍 Track This Bus</button>
